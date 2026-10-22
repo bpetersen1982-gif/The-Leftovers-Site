@@ -3,7 +3,7 @@
 Status: Draft v0.6, ready for design handoff (functional requirements only; visual/page design owned separately)
 Band: The Leftovers, Lincoln, NE. 90s/2000s rock & alternative cover band.
 Stack: Next.js (App Router) + TypeScript (strict) + PostgreSQL, hosted on Railway
-Booking contact (placeholder): `booking@theleftoversband.com`
+Domain: `theleftoversband.com` (registered at Cloudflare). Booking contact: `booking@theleftoversband.com` (forwarding set up per DOM-2).
 
 Requirement IDs (e.g. `BOOK-3`) are stable so we can reference them while iterating.
 Priority: **P0** = launch (needed before the bigger gigs), **P1** = shortly after, **P2** = later.
@@ -93,11 +93,15 @@ Target: **~$15–20/month** at launch. Example: 3 hours of video stored (180 min
 
 | Name | Role |
 |---|---|
-| Erik Delaney | Admin |
-| Jim Meyers | Admin |
-| Brandon Petersen | Band Member |
-| Jake Meyers | Band Member |
-| Mike Douglas | Band Member |
+| Erik Delaney | Admin (bootstrap) |
+| Brandon Petersen | Admin (bootstrap; site operator) |
+| Jim Meyers | Admin (invited) |
+| Jake Meyers | Band Member (invited) |
+| Mike Douglas | Band Member (invited) |
+
+**Bootstrap:** Erik and Brandon are created as the first Admins by a one-time CLI command run against the database (`pnpm admin:bootstrap --email … --name …`), which is idempotent and refuses to run if it would change an existing user's role. Everyone else is invited from the admin area (AUTH-1).
+
+**Email addresses are never committed** (the repo is public). They're passed as command arguments at bootstrap time or entered in the invite screen, and live only in the database.
 
 Roles are assigned per user and can be changed by an Admin later. Role and band membership are separate: a public "Members" page entry (bio, instrument, photo) is not tied to login permissions.
 
@@ -441,6 +445,8 @@ Options considered:
 |---|---|---|
 | CNT-1 | Admin-editable: Home, About/Bio, Members, Shows, Media, Fan Wall, Book Us, Contact. | P0 |
 | CNT-2 | Rich text editor storing structured content (not raw HTML); sanitized on render. | P0 |
+| CNT-7 | Empty content renders a deliberate empty state (e.g. Members page lists names and instruments with "Bio coming soon"), never lorem ipsum. Admins see an "Add bio" shortcut on empty sections. Band member bios and blurbs don't exist yet and are editable from day 1. | P0 |
+| CNT-8 | Design-ready layout: all colors, fonts, spacing, and radii defined as design tokens (CSS custom properties consumed by Tailwind) in one file; page sections are composable components. Incoming designs (images + HTML from the design track) restyle tokens and components without touching data, routing, or business logic. Wave 1 ships a clean, accessible, mobile-first layout with no decorative imagery. | P0 |
 | CNT-3 | Press / Booking kit page: short and long bio, downloadable hi-res press photos and logo, video highlights, sample setlist/song list, rider, booking contact. | P0 |
 | CNT-4 | Song list page (searchable list of covers the band plays, by artist and decade). Venues and wedding clients look for this. | P0 |
 | CNT-5 | Draft preview before publishing page changes. | P1 |
@@ -507,7 +513,7 @@ Self-hosting avoids YouTube/Facebook's *automated* matching, but it does not rem
 
 | ID | Requirement | Priority |
 |---|---|---|
-| LEG-1 | Public "Copyright" page listing an **email address only** for takedown notices (placeholder `copyright@theleftoversband.com`) and what a valid notice must include. There is **no public takedown button or form**; nothing the public does can unpublish content. | P0 |
+| LEG-1 | Public "Copyright" page listing an **email address only** for takedown notices (`copyright@theleftoversband.com`, forwarded per DOM-2) and what a valid notice must include. There is **no public takedown button or form**; nothing the public does can unpublish content. | P0 |
 | LEG-2 | Register a DMCA designated agent with the U.S. Copyright Office (small fee) to qualify for safe harbor on fan-submitted content. | P0 |
 | LEG-3 | Admin-only "Takedown" action, used after an Admin reviews an emailed notice and judges it legitimate: unpublishes the item, records the notice (sender, work claimed, date, Admin who acted), logged in the audit log. Restore only by Admin. | P0 |
 | LEG-4 | Video strategy favors short highlight clips over full-song or full-set recordings to reduce exposure. | P0 |
@@ -517,18 +523,18 @@ Self-hosting avoids YouTube/Facebook's *automated* matching, but it does not rem
 
 ## 14. Domain & Handles
 
-Whois checked on 2026-10-22 (availability can change at any time; register promptly):
+**Primary domain: `theleftoversband.com`** — registered 2026-10-22 at Cloudflare Registrar (expires 2027-10-22, auto-renew on). Nameservers: Cloudflare. Owner: Brandon (personal Cloudflare account; transfer per OPS-8).
 
-| Domain | Status |
-|---|---|
-| theleftovers.com | Taken (since 2002) |
-| leftoversband.com | Taken (since 2025) |
-| **theleftoversband.com** | Appeared available |
-| **theleftoverslnk.com** | Appeared available |
-| theleftoverslincoln.com | Appeared available |
-| theleftoversrock.com | Appeared available |
+Optional later: `theleftoverslnk.com` as a short redirect (appeared available 2026-10-22; not registered).
 
-Recommendation: register **theleftoversband.com** as primary and **theleftoverslnk.com** as a redirect (LNK is the local shorthand; it's short and memorable on a banner or kick drum). Use matching social handles, e.g. `@theleftoverslnk`, everywhere. Handle availability has not been checked (Erik or another member to own this). Status: Brandon reviewing domains.
+Social handles: not yet checked (Erik or another member to own this). Suggested: `@theleftoverslnk` or `@theleftoversband`, the same on every platform.
+
+| ID | Requirement | Priority |
+|---|---|---|
+| DOM-1 | `theleftoversband.com` is the canonical host; `www.theleftoversband.com` 301-redirects to it. HTTPS only (HSTS). | P0 |
+| DOM-2 | Inbound mail for `booking@`, `copyright@`, and `hello@` handled by Cloudflare Email Routing (free), forwarding to Admin inboxes. No paid mailbox needed at launch. | P0 |
+| DOM-3 | Outbound site email (magic links, booking confirmations, notifications) sent via Resend from a dedicated subdomain (e.g. `mail.theleftoversband.com`) with SPF, DKIM, and DMARC, so it doesn't conflict with Email Routing on the root domain. | P0 |
+| DOM-4 | Replies to site emails go to `booking@theleftoversband.com` (Reply-To), which forwards to Admins. | P0 |
 
 Also recommended before printing merch: a quick USPTO trademark search on "The Leftovers" for entertainment/music services. Other bands have used the name; a regional cover band is low risk, but it's worth knowing before you spend money on shirts.
 
