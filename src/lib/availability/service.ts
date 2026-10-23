@@ -178,42 +178,65 @@ export async function listUpcomingBlocks(
   });
 }
 
-/** What the public sees for a date (requirements §6.2). Booking states join in a later step. */
-export type PublicDayState = "available" | "limited" | "unavailable" | "past";
+/** What the public sees for a date (requirements §6.2). */
+export type PublicDayState = "available" | "limited" | "pending" | "booked" | "unavailable" | "past";
 
 export const PUBLIC_DAY_LABELS: Record<PublicDayState, string> = {
   available: "Available",
   limited: "Limited availability",
+  pending: "Pending",
+  booked: "Booked",
   unavailable: "Unavailable",
   past: "Past",
 };
 
+/** Higher wins when several things apply to one date (§6.2 table, top to bottom). */
+const PRIORITY: Record<PublicDayState, number> = { past: 6, unavailable: 5, booked: 4, pending: 3, limited: 2, available: 1 };
+
+function raise(states: Map<IsoDate, PublicDayState>, date: IsoDate, next: PublicDayState): void {
+  const current = states.get(date);
+  if (current !== undefined && PRIORITY[next] > PRIORITY[current]) states.set(date, next);
+}
+
 /**
- * Computes the public state of every date in [from, to]. Exposes no names, notes, or
- * counts: only the state per day.
+ * Computes the public state of every date in [from, to]. Exposes no names, notes,
+ * venues, or counts: only the state per day.
  */
 export async function publicDayStates(
-  prisma: PrismaClient,
+  prisma: Pick<PrismaClient, "availabilityBlock" | "dateClaim">,
   range: { from: IsoDate; to: IsoDate },
   today: IsoDate = todayInBandTimeZone(),
 ): Promise<Map<IsoDate, PublicDayState>> {
-  const blocks = await prisma.availabilityBlock.findMany({
-    where: { startDate: { lte: toDbDate(range.to) }, endDate: { gte: toDbDate(range.from) } },
-    select: { scope: true, startDate: true, endDate: true },
-  });
+  const [blocks, claims] = await Promise.all([
+    prisma.availabilityBlock.findMany({
+      where: { startDate: { lte: toDbDate(range.to) }, endDate: { gte: toDbDate(range.from) } },
+      select: { scope: true, startDate: true, endDate: true },
+    }),
+    prisma.dateClaim.findMany({
+      where: { date: { gte: toDbDate(range.from), lte: toDbDate(range.to) } },
+      select: { date: true, kind: true },
+    }),
+  ]);
 
   const states = new Map<IsoDate, PublicDayState>();
   for (let date = range.from; compareDates(date, range.to) <= 0; date = addDays(date, 1)) {
     states.set(date, compareDates(date, today) < 0 ? "past" : "available");
   }
   for (const block of blocks) {
-    const start = fromUtc(block.startDate);
     const end = fromUtc(block.endDate);
-    for (let date = start; compareDates(date, end) <= 0; date = addDays(date, 1)) {
-      const current = states.get(date);
-      if (current === undefined || current === "past" || current === "unavailable") continue;
-      states.set(date, block.scope === "BAND" ? "unavailable" : "limited");
+    for (let date = fromUtc(block.startDate); compareDates(date, end) <= 0; date = addDays(date, 1)) {
+      raise(states, date, block.scope === "BAND" ? "unavailable" : "limited");
     }
   }
+  for (const claim of claims) raise(states, fromUtc(claim.date), claim.kind === "BOOKED" ? "booked" : "pending");
   return states;
+}
+
+/** State of a single date. */
+export async function publicDayState(
+  prisma: Pick<PrismaClient, "availabilityBlock" | "dateClaim">,
+  date: IsoDate,
+  today: IsoDate = todayInBandTimeZone(),
+): Promise<PublicDayState> {
+  return (await publicDayStates(prisma, { from: date, to: date }, today)).get(date) ?? "unavailable";
 }

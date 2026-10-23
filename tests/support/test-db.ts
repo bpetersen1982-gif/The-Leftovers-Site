@@ -20,6 +20,6 @@ export function createTestClient(): PrismaClient {
 /** Empties every application table (fast, keeps schema). */
 export async function resetDatabase(prisma: PrismaClient): Promise<void> {
   await prisma.$executeRawUnsafe(`
-    TRUNCATE TABLE "rate_rule", "special_date", "pricing_settings", "availability_block", "audit_log", "invite", "passkey", "session", "account", "verification",
+    TRUNCATE TABLE "booking_event", "date_claim", "quote", "booking_request", "rate_rule", "special_date", "pricing_settings", "availability_block", "audit_log", "invite", "passkey", "session", "account", "verification",
       "rateLimit", "band_member", "page", "site_settings", "user" RESTART IDENTITY CASCADE`);
 }

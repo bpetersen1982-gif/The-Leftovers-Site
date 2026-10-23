@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { BlockContent } from "@/components/block-content";
 import { getPage, getSiteSettings } from "@/lib/content/service";
+import { SOCIAL_PLATFORMS } from "@/lib/content/settings";
 import { db } from "@/lib/db";
 
 const SITE_URL = "https://theleftoversband.com";
@@ -82,6 +83,37 @@ export default async function HomePage() {
             </a>
           </div>
         </div>
+      </section>
+
+      <section aria-labelledby="contact-heading" className="mx-auto max-w-3xl px-6 pb-16 text-center">
+        <h2 id="contact-heading" className="font-heading text-2xl font-bold tracking-wider uppercase">
+          Get in touch
+        </h2>
+        <p className="mt-3 leading-relaxed">
+          Not booking a show? Say hi, ask a question, or tell us what you want to hear next.
+        </p>
+        <p className="mt-4">
+          <a href={`mailto:${settings.generalEmail}`} className="font-semibold break-all underline">
+            {settings.generalEmail}
+          </a>
+        </p>
+        {settings.socialLinks.length > 0 && (
+          <ul aria-label="Follow The Leftovers" className="mt-5 flex flex-wrap justify-center gap-3">
+            {settings.socialLinks.map((link) => (
+              <li key={link.platform}>
+                <a href={link.url} rel="noopener noreferrer" target="_blank" className="inline-block border border-cream/70 px-3 py-1 font-heading tracking-wider uppercase hover:bg-cream hover:text-ink">
+                  {SOCIAL_PLATFORMS[link.platform].label}
+                  <span className="sr-only"> (opens in a new tab)</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="mt-5 text-sm">
+          <Link href="/contact" className="underline">
+            More ways to reach us
+          </Link>
+        </p>
       </section>
 
       <script

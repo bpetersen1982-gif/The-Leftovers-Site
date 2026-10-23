@@ -38,6 +38,8 @@ const WEEKDAYS = [
 const SHORT_LABELS: Record<PublicDayState, string> = {
   available: "Open",
   limited: "Limited",
+  pending: "Pending",
+  booked: "Booked",
   unavailable: "Unavailable",
   past: "",
 };
@@ -45,16 +47,21 @@ const SHORT_LABELS: Record<PublicDayState, string> = {
 const CELL_STYLES: Record<PublicDayState, string> = {
   available: "border-cream/70 bg-charcoal hover:bg-cream hover:text-ink",
   limited: "border-olive bg-olive/30 hover:bg-cream hover:text-ink",
+  pending: "border-red border-dashed bg-ink/60 hover:bg-cream hover:text-ink",
+  booked: "border-red bg-red-ui/40 hover:bg-cream hover:text-ink",
   unavailable: "border-transparent bg-ink/60 text-cream/90",
   past: "border-transparent text-cream/50",
 };
 
-const REQUESTABLE: ReadonlySet<PublicDayState> = new Set(["available", "limited"]);
+/** Open dates go to the booking form; pending/booked go to "contact the band about this date". */
+const REQUESTABLE: ReadonlySet<PublicDayState> = new Set(["available", "limited", "pending", "booked"]);
 
-function requestHref(bookingEmail: string, date: IsoDate): string {
-  const subject = `Booking request: ${formatLongDate(date)}`;
-  const body = `Hi Leftovers,\n\nWe'd like to book you for ${formatLongDate(date)}.\n\nVenue / event:\nCity:\nStart and end time:\nNumber of sets:\nPhone:\n`;
-  return `mailto:${bookingEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+function requestVerb(state: PublicDayState): string {
+  return state === "pending" || state === "booked" ? "Contact the band about this date" : "Request this date";
+}
+
+function requestHref(date: IsoDate): string {
+  return `/book/request?date=${date}`;
 }
 
 export default async function BookPage({ searchParams }: { searchParams: Promise<{ month?: string; view?: string }> }) {
@@ -85,7 +92,7 @@ export default async function BookPage({ searchParams }: { searchParams: Promise
   return (
     <PageBody title="Book the band">
       <p className="leading-relaxed">
-        Pick an open date to send us a request. We play bars, clubs, festivals, weddings, graduations, private parties, and
+        Pick an open date to request it. We play bars, clubs, festivals, weddings, graduations, private parties, and
         corporate events. Dates are open up to 18 months out.
       </p>
 
@@ -183,9 +190,9 @@ export default async function BookPage({ searchParams }: { searchParams: Promise
                   return (
                     <td key={date} className="p-0 align-top">
                       {REQUESTABLE.has(state) ? (
-                        <a href={requestHref(settings.bookingEmail, date)} aria-label={`${fullLabel}. Request this date.`} className={cell}>
+                        <Link href={requestHref(date)} aria-label={`${fullLabel}. ${requestVerb(state)}.`} className={cell}>
                           {content}
-                        </a>
+                        </Link>
                       ) : (
                         <span aria-label={fullLabel} className={cell}>
                           {content}
@@ -210,9 +217,9 @@ export default async function BookPage({ searchParams }: { searchParams: Promise
                     {formatLongDate(date)} &middot; <strong>{PUBLIC_DAY_LABELS[state]}</strong>
                   </span>
                   {REQUESTABLE.has(state) && (
-                    <a href={requestHref(settings.bookingEmail, date)} className="underline" aria-label={`Request ${formatLongDate(date)}`}>
-                      Request this date
-                    </a>
+                    <Link href={requestHref(date)} className="underline" aria-label={`${requestVerb(state)}: ${formatLongDate(date)}`}>
+                      {requestVerb(state)}
+                    </Link>
                   )}
                 </li>
               );
@@ -221,11 +228,15 @@ export default async function BookPage({ searchParams }: { searchParams: Promise
       )}
 
       <p className="mt-8 text-sm">
-        Date not listed, or flexible?{" "}
+        Not sure of the date?{" "}
+        <Link href="/book/request?flexible=1" className="underline">
+          Send a flexible request
+        </Link>
+        {" "}or email{" "}
         <a href={`mailto:${settings.bookingEmail}`} className="underline">
-          Email {settings.bookingEmail}
+          {settings.bookingEmail}
         </a>
-        . Requests open your email app with the date filled in; an online booking form is coming soon.
+        .
       </p>
       {monthOf(today) === month && <p className="sr-only">Today is {formatLongDate(today)}.</p>}
     </PageBody>

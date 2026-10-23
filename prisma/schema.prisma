@@ -297,3 +297,160 @@ model SpecialDate {
 
   @@map("special_date")
 }
+
+// ---------------------------------------------------------------- booking
+
+enum BookingRequestKind {
+  /// Came through the booking wizard.
+  WIZARD
+  /// "Contact the band about this date" (date already Pending/Booked) or general booking contact.
+  DATE_CONTACT
+}
+
+/// Request lifecycle (requirements §6.6).
+enum BookingStatus {
+  /// Wizard started; contact details saved at step 2 but not submitted (FUN-2).
+  IN_PROGRESS
+  /// Submitted; no instant quote. The band will reach out.
+  AWAITING_CONTACT
+  /// Instant or manual quote sent; waiting on the prospect. Expiry is read from the quote.
+  QUOTED
+  /// Prospect accepted the quote; date is Pending until an Admin confirms.
+  ACCEPTED
+  DECLINED_BY_PROSPECT
+  /// A band member has been in touch.
+  CONTACTED
+  CONFIRMED
+  DECLINED_BY_BAND
+  WITHDRAWN
+  /// Bumped by an Admin override.
+  RELEASED
+  CANCELLED
+}
+
+enum SoundProvided {
+  YES
+  NO
+  PARTIAL
+  UNSURE
+}
+
+enum Setting {
+  INDOOR
+  OUTDOOR
+  UNSURE
+}
+
+model BookingRequest {
+  id               String             @id @default(uuid()) @db.Uuid
+  /// Human-friendly reference shown to the prospect, e.g. "LO-7K3M9Q".
+  reference        String             @unique
+  kind             BookingRequestKind
+  status           BookingStatus
+  /// Null = flexible / not sure yet.
+  eventDate        DateTime?          @db.Date
+  /// Local times in the band's timezone, "HH:MM"; end may be after midnight.
+  startTime        String?
+  endTime          String?
+  sets             Int?
+  eventType        EventType?
+  contactName      String
+  email            String
+  phone            String
+  organization     String             @default("")
+  street           String             @default("")
+  city             String             @default("")
+  state            String             @default("")
+  zip              String             @default("")
+  attendance       Int?
+  setting          Setting?
+  soundProvided    SoundProvided?
+  message          String             @default("")
+  /// Straight-line miles from the travel origin; null if the ZIP wasn't found.
+  distanceMiles    Float?
+  /// Why no instant quote was offered (internal; see INELIGIBLE_REASON_LABELS).
+  ineligibleReasons String[]          @default([])
+  /// Another open request, hold, or booking exists for the same date.
+  isConflict       Boolean            @default(false)
+  /// SHA-256 of the prospect's private-link token.
+  accessTokenHash  String             @unique
+  /// Prospect's optional note when accepting/declining (max 250 chars).
+  responseNote     String             @default("")
+  respondedAt      DateTime?          @db.Timestamptz(3)
+  submittedAt      DateTime?          @db.Timestamptz(3)
+  version          Int                @default(1)
+  createdAt        DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime           @updatedAt @db.Timestamptz(3)
+
+  quotes           Quote[]
+  claim            DateClaim?
+  events           BookingEvent[]
+
+  @@index([status, eventDate])
+  @@index([eventDate])
+  @@index([email, createdAt])
+  @@map("booking_request")
+}
+
+/// Price snapshot (requirements BOOK-5). Later rate changes never alter a quote.
+model Quote {
+  id              String         @id @default(uuid()) @db.Uuid
+  requestId       String         @db.Uuid
+  request         BookingRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  eventType       EventType
+  dayCategory     DayCategory
+  ratePerSetCents Int
+  sets            Int
+  totalCents      Int
+  expiresAt       DateTime       @db.Timestamptz(3)
+  /// Set when a newer quote replaces this one.
+  supersededAt    DateTime?      @db.Timestamptz(3)
+  /// Null = generated automatically by the wizard.
+  createdById     String?
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
+
+  @@index([requestId, createdAt])
+  @@map("quote")
+}
+
+enum ClaimKind {
+  PENDING
+  BOOKED
+}
+
+/// At most one claim per date (requirements BOOK-16, BOOK-27). The unique index is what
+/// makes two simultaneous accepts for the same date impossible.
+model DateClaim {
+  id        String         @id @default(uuid()) @db.Uuid
+  date      DateTime       @unique @db.Date
+  kind      ClaimKind
+  requestId String         @unique @db.Uuid
+  request   BookingRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime       @updatedAt @db.Timestamptz(3)
+
+  @@map("date_claim")
+}
+
+enum BookingEventKind {
+  STATUS
+  NOTE
+  CONTACTED
+}
+
+/// Timeline of a request: status changes, internal notes, "contacted" logs (BOOK-13).
+model BookingEvent {
+  id         String           @id @default(uuid()) @db.Uuid
+  requestId  String           @db.Uuid
+  request    BookingRequest   @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  kind       BookingEventKind
+  fromStatus BookingStatus?
+  toStatus   BookingStatus?
+  body       String           @default("")
+  /// Null = the prospect or the system.
+  authorId   String?
+  createdAt  DateTime         @default(now()) @db.Timestamptz(3)
+
+  @@index([requestId, createdAt])
+  @@map("booking_event")
+}

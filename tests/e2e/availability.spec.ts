@@ -46,7 +46,7 @@ test("a member's out-of-office day shows as Limited publicly, without their name
   const publicPage = await visitor.newPage();
   await publicPage.goto(`/book?month=${monthOf(outDay)}`);
   await expect(dayCell(publicPage, outDay)).toHaveAccessibleName(`${formatLongDate(outDay)}: Limited availability. Request this date.`);
-  await expect(dayCell(publicPage, outDay)).toHaveAttribute("href", /^mailto:booking@theleftoversband\.com\?subject=Booking%20request/);
+  await expect(dayCell(publicPage, outDay)).toHaveAttribute("href", `/book/request?date=${outDay}`);
   await expect(publicPage.getByText(MEMBER.name)).toHaveCount(0);
   await expect(publicPage.getByText("Sister's graduation")).toHaveCount(0);
   await visitor.close();
@@ -101,7 +101,7 @@ test("the public calendar has a list view, month navigation, and rejects past da
   }
 
   await page.getByRole("link", { name: "Show as a list" }).click();
-  await expect(page.getByRole("link", { name: `Request ${formatLongDate(today)}` })).toBeVisible();
+  await expect(page.getByRole("link", { name: `Request this date: ${formatLongDate(today)}` })).toBeVisible();
 
   await page.getByRole("navigation", { name: "Calendar months" }).getByRole("link", { name: /→$/ }).click();
   await expect(page).toHaveURL(/view=list/);

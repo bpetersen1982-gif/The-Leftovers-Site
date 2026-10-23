@@ -16,7 +16,7 @@ export function escapeHtml(value: string): string {
 
 const COLORS = { ink: "#0B0B0B", cream: "#D8CFBD", red: "#A42626" } as const;
 
-function layout(params: { heading: string; body: string; actionLabel: string; actionUrl: string; footer: string }): string {
+export function emailLayout(params: { heading: string; body: string; actionLabel: string; actionUrl: string; footer: string }): string {
   const url = escapeHtml(params.actionUrl);
   return `<!doctype html>
 <html lang="en"><body style="margin:0;background:${COLORS.ink};color:${COLORS.cream};font-family:Georgia,'Courier New',serif;">
@@ -45,7 +45,7 @@ export function inviteEmail(params: {
     to: params.to,
     subject: "You're invited to The Leftovers band site",
     text: `Hi ${params.inviteeName},\n\n${intro}\n\nAccept your invite:\n${params.url}\n\n${footer}\n`,
-    html: layout({
+    html: emailLayout({
       heading: `Hi ${params.inviteeName},`,
       body: escapeHtml(intro),
       actionLabel: "Accept invite",
@@ -61,7 +61,7 @@ export function magicLinkEmail(params: { to: string; name: string; url: string; 
     to: params.to,
     subject: "Your login link for The Leftovers",
     text: `Hi ${params.name},\n\nLog in to The Leftovers band site:\n${params.url}\n\n${footer}\n`,
-    html: layout({
+    html: emailLayout({
       heading: `Hi ${params.name},`,
       body: "Here's your login link for The Leftovers band site.",
       actionLabel: "Log in",
