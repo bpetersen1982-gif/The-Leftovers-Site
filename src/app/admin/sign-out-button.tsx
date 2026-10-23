@@ -14,7 +14,7 @@ export function SignOutButton() {
       onClick={async () => {
         setPending(true);
         await authClient.signOut();
-        router.replace("/login");
+        router.replace("/");
         router.refresh();
       }}
       className="border border-cream/70 px-3 py-1 font-heading tracking-wider uppercase hover:bg-cream hover:text-ink disabled:opacity-60"

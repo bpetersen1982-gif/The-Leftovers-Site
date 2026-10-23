@@ -56,6 +56,22 @@ test("admin logs in by email, invites a member, member accepts and is logged in"
   await expect(memberPage.getByText("That invite was already used")).toBeVisible();
   await memberContext.close();
 
+  // Signing out lands on the public home page, and admin is closed again.
+  const signOutContext = await browser.newContext();
+  const signOutPage = await signOutContext.newPage();
+  await signOutPage.goto(await (async () => {
+    await signOutPage.goto("/login");
+    await signOutPage.getByLabel("Email").fill(MEMBER.email);
+    await signOutPage.getByRole("button", { name: "Email me a login link" }).click();
+    return waitForLink(MEMBER.email, "login link");
+  })());
+  await signOutPage.getByRole("button", { name: "Sign out" }).click();
+  await expect(signOutPage).toHaveURL(/\/$/);
+  await expect(signOutPage.getByRole("heading", { name: "Book the band" })).toBeVisible();
+  await signOutPage.goto("/admin");
+  await expect(signOutPage).toHaveURL(/\/login$/);
+  await signOutContext.close();
+
   // Admin sees the member as active.
   await page.reload();
   await expect(page.getByRole("heading", { name: "Active users (2)" })).toBeVisible();
