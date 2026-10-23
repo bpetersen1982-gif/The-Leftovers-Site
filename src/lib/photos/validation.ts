@@ -66,3 +66,4 @@ export type PhotoDetailsInput = z.infer<typeof photoDetailsSchema>;
 export const bulkRefsSchema = z.array(photoRefSchema).min(1, "Pick at least one photo.").max(MAX_BULK);
 
 export const rejectionReasonSchema = singleLine(MAX_REJECTION_REASON, "Reason");
+export const removalReasonSchema = singleLine(MAX_REJECTION_REASON, "Reason");

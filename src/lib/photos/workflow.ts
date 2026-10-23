@@ -8,6 +8,7 @@ import type { PhotoDeps } from "./deps";
 import {
   newPublicPrefix,
   parseStoredFiles,
+  removePublicFiles,
   privateFileKey,
   PUBLIC_CACHE_CONTROL,
   publicFileKey,
@@ -20,6 +21,7 @@ import {
   type PhotoRef,
   photoRefSchema,
   rejectionReasonSchema,
+  removalReasonSchema,
 } from "./validation";
 
 /**
@@ -122,6 +124,11 @@ async function removePublicCopies(deps: PhotoDeps, photoId: string, keys: readon
   });
 }
 
+const PUBLISH_AUDIT: Partial<Record<PhotoStatus, "photo.approve" | "photo.restore">> = {
+  PENDING_REVIEW: "photo.approve",
+  DELETION_REQUESTED: "photo.restore",
+};
+
 /** Publishes one photo the actor is allowed to publish. Returns false if it lost a race. */
 async function publish(deps: PhotoDeps, actor: AuditActor, photo: PhotoRow, from: readonly PhotoStatus[], requestId?: string | null): Promise<boolean> {
   const { prefix, keys } = await copyToPublic(deps, photo);
@@ -132,8 +139,13 @@ async function publish(deps: PhotoDeps, actor: AuditActor, photo: PhotoRow, from
       data: {
         status: "APPROVED",
         publicPrefix: prefix,
-        publishedAt: now,
+        // A restored photo keeps its place in the gallery.
+        publishedAt: photo.publishedAt ?? now,
         submittedAt: photo.submittedAt ?? now,
+        removalRequestedAt: null,
+        removalRequestedById: null,
+        removalRequestedByRole: null,
+        removalReason: null,
         decidedAt: now,
         decidedById: actor.id,
         decidedByRole: actor.role,
@@ -144,7 +156,7 @@ async function publish(deps: PhotoDeps, actor: AuditActor, photo: PhotoRow, from
     if (updated.count !== 1) return false;
     await writeAudit(tx, {
       actor,
-      action: photo.status === "PENDING_REVIEW" ? "photo.approve" : "photo.publish",
+      action: PUBLISH_AUDIT[photo.status] ?? "photo.publish",
       targetType: "photo",
       targetId: photo.id,
       before: { status: photo.status },
@@ -279,4 +291,110 @@ export async function deleteUnpublishedPhoto(deps: PhotoDeps, actor: AuditActor,
     });
   });
   await removePrivateFiles(deps.storage, photo.id);
+}
+
+// ---------------------------------------------------------------- removing published photos (APR-7, APR-8)
+
+export interface RemovalResult {
+  /** False if the database change succeeded but public files couldn't be deleted (logged). */
+  readonly filesRemoved: boolean;
+}
+
+/**
+ * Step 1: takes a published photo off the site immediately. Any Admin or Member can do
+ * this; an Admin then deletes it for good or puts it back. The database flips first (so
+ * the public pages stop listing it at once), then every public copy is deleted.
+ */
+export async function requestPhotoRemoval(
+  deps: PhotoDeps,
+  actor: AuditActor,
+  input: PhotoRef,
+  reason: string,
+  requestId?: string | null,
+): Promise<RemovalResult> {
+  if (!can(actor.role, "photos:requestRemoval")) throw new PhotoError("FORBIDDEN");
+  const ref = photoRefSchema.parse(input);
+  const cleanReason = removalReasonSchema.parse(reason);
+  const photo = await load(deps, ref);
+  if (photo.status !== "APPROVED") throw new PhotoError("INVALID_STATE");
+
+  await deps.prisma.$transaction(async (tx) => {
+    const updated = await tx.photo.updateMany({
+      where: { id: ref.id, version: ref.version, status: "APPROVED" },
+      data: {
+        status: "DELETION_REQUESTED",
+        publicPrefix: null,
+        removalRequestedAt: nowOf(deps),
+        removalRequestedById: actor.id,
+        removalRequestedByRole: actor.role,
+        removalReason: cleanReason || null,
+        version: { increment: 1 },
+      },
+    });
+    if (updated.count !== 1) throw new PhotoError("CONFLICT");
+    await writeAudit(tx, {
+      actor,
+      action: "photo.remove",
+      targetType: "photo",
+      targetId: ref.id,
+      before: { status: "APPROVED" },
+      after: { status: "DELETION_REQUESTED", reason: cleanReason },
+      requestId,
+    });
+  });
+  return { filesRemoved: await tryRemovePublicFiles(deps, ref.id) };
+}
+
+async function tryRemovePublicFiles(deps: PhotoDeps, photoId: string): Promise<boolean> {
+  try {
+    await removePublicFiles(deps.storage, photoId);
+    return true;
+  } catch (error) {
+    // The photo is off every page, but its old URL could still load. Permanent delete retries.
+    logger.error({ err: error, photoId }, "removed photo's public files could not be deleted");
+    return false;
+  }
+}
+
+/** Step 2a (Admins): puts a removed photo back on the site under a new URL. */
+export async function restorePhoto(deps: PhotoDeps, actor: AuditActor, input: PhotoRef, requestId?: string | null): Promise<void> {
+  if (!can(actor.role, "photos:delete")) throw new PhotoError("FORBIDDEN");
+  const ref = photoRefSchema.parse(input);
+  const photo = await load(deps, ref);
+  if (photo.status !== "DELETION_REQUESTED") throw new PhotoError("INVALID_STATE");
+  if (!(await publish(deps, actor, photo, ["DELETION_REQUESTED"], requestId))) throw new PhotoError("CONFLICT");
+}
+
+/**
+ * Step 2b (Admins): permanently deletes a removed photo: files from both buckets and the
+ * database row (APR-8). The audit entry stays.
+ */
+export async function purgePhoto(deps: PhotoDeps, actor: AuditActor, input: PhotoRef, requestId?: string | null): Promise<RemovalResult> {
+  if (!can(actor.role, "photos:delete")) throw new PhotoError("FORBIDDEN");
+  const ref = photoRefSchema.parse(input);
+  const photo = await load(deps, ref);
+  if (photo.status !== "DELETION_REQUESTED") throw new PhotoError("INVALID_STATE");
+
+  await deps.prisma.$transaction(async (tx) => {
+    const deleted = await tx.photo.deleteMany({ where: { id: ref.id, version: ref.version, status: "DELETION_REQUESTED" } });
+    if (deleted.count !== 1) throw new PhotoError("CONFLICT");
+    await writeAudit(tx, {
+      actor,
+      action: "photo.purge",
+      targetType: "photo",
+      targetId: ref.id,
+      before: {
+        status: photo.status,
+        uploaderId: photo.uploaderId,
+        filename: photo.originalFilename,
+        altText: photo.altText,
+        removalRequestedById: photo.removalRequestedById,
+        removalReason: photo.removalReason,
+      },
+      requestId,
+    });
+  });
+  const filesRemoved = await tryRemovePublicFiles(deps, ref.id);
+  await removePrivateFiles(deps.storage, ref.id);
+  return { filesRemoved };
 }

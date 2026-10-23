@@ -85,6 +85,9 @@ export interface BandPhoto {
   readonly credit: string;
   readonly failureReason: string | null;
   readonly rejectionReason: string | null;
+  readonly removalReason: string | null;
+  readonly removalRequestedByName: string | null;
+  readonly removalRequestedByRole: Role | null;
   readonly uploaderId: string;
   readonly uploaderName: string;
   readonly isMine: boolean;
@@ -101,6 +104,8 @@ export interface BandPhotoBoard {
   readonly pending: readonly BandPhoto[];
   readonly published: readonly BandPhoto[];
   readonly publishedTotal: number;
+  /** Taken off the site, waiting for an Admin to delete or restore (APR-7). */
+  readonly removed: readonly BandPhoto[];
 }
 
 const BAND_SELECT = {
@@ -113,6 +118,9 @@ const BAND_SELECT = {
   credit: true,
   failureReason: true,
   rejectionReason: true,
+  removalReason: true,
+  removalRequestedByRole: true,
+  removalRequestedBy: { select: { name: true } },
   uploaderId: true,
   createdAt: true,
   submittedAt: true,
@@ -133,7 +141,7 @@ export async function getBandPhotoBoard(
   viewer: { id: string; role: Role },
 ): Promise<BandPhotoBoard> {
   const reviewsAll = can(viewer.role, "photos:review");
-  const [mine, pending, published, publishedTotal] = await Promise.all([
+  const [mine, pending, published, publishedTotal, removed] = await Promise.all([
     prisma.photo.findMany({
       where: { uploaderId: viewer.id, status: { in: ["DRAFT", "REJECTED", "FAILED"] } },
       orderBy: { createdAt: "asc" },
@@ -151,6 +159,11 @@ export async function getBandPhotoBoard(
       select: BAND_SELECT,
     }),
     prisma.photo.count({ where: { status: "APPROVED" } }),
+    prisma.photo.findMany({
+      where: { status: "DELETION_REQUESTED" },
+      orderBy: { removalRequestedAt: "asc" },
+      select: BAND_SELECT,
+    }),
   ]);
 
   type Row = (typeof mine)[number];
@@ -164,6 +177,9 @@ export async function getBandPhotoBoard(
     credit: row.credit,
     failureReason: row.failureReason,
     rejectionReason: row.rejectionReason,
+    removalReason: row.removalReason,
+    removalRequestedByName: row.removalRequestedBy?.name ?? null,
+    removalRequestedByRole: row.removalRequestedByRole,
     uploaderId: row.uploaderId,
     uploaderName: row.uploader.name,
     isMine: row.uploaderId === viewer.id,
@@ -178,6 +194,7 @@ export async function getBandPhotoBoard(
     pending: await Promise.all(pending.map(toBand)),
     published: await Promise.all(published.map(toBand)),
     publishedTotal,
+    removed: await Promise.all(removed.map(toBand)),
   };
 }
 

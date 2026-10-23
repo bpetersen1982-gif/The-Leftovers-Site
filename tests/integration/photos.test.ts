@@ -6,7 +6,16 @@ import { PhotoError } from "@/lib/photos/errors";
 import { originalKey, parseStoredFiles, privateFileKey } from "@/lib/photos/files";
 import { getBandPhotoBoard, getPublicPhoto, listPublicPhotos, publicImage } from "@/lib/photos/queries";
 import { completeUpload, createUpload } from "@/lib/photos/upload";
-import { approvePhotos, deleteUnpublishedPhoto, rejectPhotos, submitPhotos, updatePhotoDetails } from "@/lib/photos/workflow";
+import {
+  approvePhotos,
+  deleteUnpublishedPhoto,
+  purgePhoto,
+  rejectPhotos,
+  requestPhotoRemoval,
+  restorePhoto,
+  submitPhotos,
+  updatePhotoDetails,
+} from "@/lib/photos/workflow";
 import { createTestStorage, resetStorage } from "../support/storage";
 import { createTestClient, resetDatabase } from "../support/test-db";
 
@@ -282,6 +291,78 @@ describe("deleting unpublished photos", () => {
   });
 });
 
+describe("removing published photos", () => {
+  async function published(admin: { id: string; role: Role }) {
+    const { photoId } = await upload(admin, await sampleJpeg());
+    await submitPhotos(deps, admin, [await describeAndRef(admin, photoId, "Published shot")]);
+    const photo = await current(photoId);
+    const urls = [...(publicImage(storage, photo)?.sources.map((source) => source.url) ?? []), publicImage(storage, photo)?.jpeg?.url ?? ""];
+    for (const url of urls) expect((await fetch(url)).status).toBe(200);
+    return { photo, urls };
+  }
+
+  it("lets another Admin take a photo down at once, then delete it for good", async () => {
+    const erik = await makeUser("ADMIN");
+    const brandon = await makeUser("ADMIN", "Brandon Admin");
+    const { photo, urls } = await published(erik);
+
+    expect(await requestPhotoRemoval(deps, brandon, { id: photo.id, version: photo.version }, " Eyes closed ")).toEqual({ filesRemoved: true });
+    const removed = await current(photo.id);
+    expect(removed).toMatchObject({ status: "DELETION_REQUESTED", publicPrefix: null, removalRequestedById: brandon.id, removalReason: "Eyes closed" });
+    for (const url of urls) expect((await fetch(url)).ok).toBe(false);
+    expect((await listPublicPhotos(prisma, storage, 1)).total).toBe(0);
+    expect(await getPublicPhoto(prisma, storage, photo.id)).toBeNull();
+    // Band still sees it (private preview) in the removed list.
+    const board = await getBandPhotoBoard(prisma, storage, erik);
+    expect(board.removed.map((item) => [item.id, item.removalRequestedByName])).toEqual([[photo.id, "Brandon Admin"]]);
+    expect((await fetch(board.removed[0]?.image?.src ?? "")).status).toBe(200);
+
+    await purgePhoto(deps, erik, { id: photo.id, version: removed.version });
+    expect(await prisma.photo.findUnique({ where: { id: photo.id } })).toBeNull();
+    for (const file of parseStoredFiles(photo.variants)) expect(await storage.headPrivate(privateFileKey(photo.id, file.file))).toBeNull();
+    const actions = (await prisma.auditLog.findMany({ where: { targetId: photo.id }, orderBy: { createdAt: "asc" } })).map((row) => row.action);
+    expect(actions).toEqual(["photo.publish", "photo.remove", "photo.purge"]);
+  });
+
+  it("lets a Member take a photo down but only an Admin delete or restore it", async () => {
+    const admin = await makeUser("ADMIN");
+    const member = await makeUser("MEMBER");
+    const { photo, urls } = await published(admin);
+    await requestPhotoRemoval(deps, member, { id: photo.id, version: photo.version }, "");
+    const removed = await current(photo.id);
+    expect(removed.removalRequestedByRole).toBe("MEMBER");
+    for (const url of urls) expect((await fetch(url)).ok).toBe(false);
+
+    await expect(purgePhoto(deps, member, { id: photo.id, version: removed.version })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(restorePhoto(deps, member, { id: photo.id, version: removed.version })).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    await restorePhoto(deps, admin, { id: photo.id, version: removed.version });
+    const restored = await current(photo.id);
+    expect(restored).toMatchObject({ status: "APPROVED", removalRequestedById: null, removalReason: null });
+    expect(restored.publishedAt).toEqual(photo.publishedAt);
+    // New URL; the old one stays dead.
+    expect(restored.publicPrefix).not.toBe(photo.publicPrefix);
+    expect((await fetch(publicImage(storage, restored)?.src ?? "")).status).toBe(200);
+    for (const url of urls) expect((await fetch(url)).ok).toBe(false);
+    expect((await listPublicPhotos(prisma, storage, 1)).total).toBe(1);
+  });
+
+  it("is race-safe and only works on the right states", async () => {
+    const erik = await makeUser("ADMIN");
+    const brandon = await makeUser("ADMIN", "Brandon Admin");
+    const { photo } = await published(erik);
+    const ref = { id: photo.id, version: photo.version };
+    const results = await Promise.allSettled([requestPhotoRemoval(deps, erik, ref, ""), requestPhotoRemoval(deps, brandon, ref, "")]);
+    expect(results.map((result) => result.status).sort()).toEqual(["fulfilled", "rejected"]);
+    expect(await prisma.auditLog.count({ where: { action: "photo.remove" } })).toBe(1);
+    // Can't purge a photo that's still public, or remove a draft.
+    const draft = await upload(erik, await sampleJpeg());
+    const draftRow = await current(draft.photoId);
+    await expect(requestPhotoRemoval(deps, erik, { id: draft.photoId, version: draftRow.version }, "")).rejects.toMatchObject({ code: "INVALID_STATE" });
+    await expect(purgePhoto(deps, erik, { id: draft.photoId, version: draftRow.version })).rejects.toMatchObject({ code: "INVALID_STATE" });
+  });
+});
+
 describe("photo queries", () => {
   it("shows Members their own pending photos and Admins everyone's; the public sees only approved", async () => {
     const member = await makeUser("MEMBER");
@@ -351,5 +432,21 @@ describe("photo jobs", () => {
     expect((await runPhotoJobs(prisma, storage, new Date(nextDay.getTime() + 3_600_000))).digestsSent).toBe(0);
     const adminEmail = (await prisma.user.findUniqueOrThrow({ where: { id: admin.id } })).email;
     expect(sentEmails).toEqual([{ to: adminEmail, subject: "1 photo to review: The Leftovers" }]);
+  });
+
+  it("includes photos Members took off the site, but not ones Admins removed", async () => {
+    const member = await makeUser("MEMBER");
+    const admin = await makeUser("ADMIN");
+    const take = async (actor: { id: string; role: Role }) => {
+      const { photoId } = await upload(admin, await sampleJpeg());
+      await submitPhotos(deps, admin, [await describeAndRef(admin, photoId)]);
+      const photo = await current(photoId);
+      await requestPhotoRemoval(deps, actor, { id: photoId, version: photo.version }, "");
+    };
+    await take(admin);
+    expect((await runPhotoJobs(prisma, storage, NOW)).digestsSent).toBe(0);
+    await take(member);
+    expect((await runPhotoJobs(prisma, storage, new Date(NOW.getTime() + 24 * 3_600_000))).digestsSent).toBe(1);
+    expect(sentEmails.map((email) => email.subject)).toEqual(["1 photo taken off the site: The Leftovers"]);
   });
 });

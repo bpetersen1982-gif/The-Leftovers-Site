@@ -33,6 +33,10 @@ export const PERMISSIONS = {
   "photos:review": ["ADMIN"],
   /** Edit details / delete any not-yet-public photo (Members: their own only, APR-6). */
   "photos:manageAll": ["ADMIN"],
+  /** Take a published photo off the site right away (APR-7, step 1). */
+  "photos:requestRemoval": ["ADMIN", "MEMBER"],
+  /** Permanently delete or restore a removed photo (APR-7, step 2). */
+  "photos:delete": ["ADMIN"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

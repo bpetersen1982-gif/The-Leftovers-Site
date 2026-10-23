@@ -14,7 +14,8 @@ import type { ObjectStorage } from "../storage";
  * - photos stuck in PROCESSING (the app restarted mid-way) are marked FAILED so the
  *   uploader sees it and can retry
  * - FAILED records are removed after a week (their files are already gone)
- * - once a day, Admins get a digest of photos waiting for review (requirements APR-10)
+ * - once a day, Admins get a digest of photos waiting for review and photos Members took
+ *   off the site (requirements APR-7, APR-10)
  *
  * Runs under a Postgres advisory lock, so only one app instance does the work.
  */
@@ -51,33 +52,46 @@ async function claimDigest(tx: Prisma.TransactionClient, now: Date): Promise<boo
   return true;
 }
 
-export function reviewDigestEmail(to: string, pending: number, oldestDays: number, appUrl: string) {
-  const noun = pending === 1 ? "photo is" : "photos are";
-  const age = oldestDays >= 1 ? ` The oldest has waited ${oldestDays} day${oldestDays === 1 ? "" : "s"}.` : "";
-  const summary = `${pending} ${noun} waiting for your review.${age}`;
-  const url = `${appUrl}/admin/photos#review`;
-  const footer = "You get this once a day while band members' photos are waiting. Nothing is public until an Admin approves it.";
+function photos(count: number): string {
+  return `${count} ${count === 1 ? "photo" : "photos"}`;
+}
+
+export function reviewDigestEmail(to: string, pending: number, oldestDays: number, removals: number, appUrl: string) {
+  const parts: string[] = [];
+  if (pending > 0) {
+    const age = oldestDays >= 1 ? ` The oldest has waited ${oldestDays} day${oldestDays === 1 ? "" : "s"}.` : "";
+    parts.push(`${photos(pending)} ${pending === 1 ? "is" : "are"} waiting for your review.${age}`);
+  }
+  if (removals > 0) {
+    parts.push(`Band members took ${photos(removals)} off the site. Delete ${removals === 1 ? "it" : "them"} for good or put ${removals === 1 ? "it" : "them"} back.`);
+  }
+  const summary = parts.join(" ");
+  const url = `${appUrl}/admin/photos${pending > 0 ? "#review" : "#removed"}`;
+  const footer = "You get this once a day while band members' photos need an Admin. Nothing is public until an Admin approves it.";
+  const subject = pending > 0 ? `${photos(pending)} to review` : `${photos(removals)} taken off the site`;
   return {
     to,
-    subject: `${pending} ${pending === 1 ? "photo" : "photos"} to review: The Leftovers`,
+    subject: `${subject}: The Leftovers`,
     text: `${summary}\n\nReview them:\n${url}\n\n${footer}\n`,
     html: emailLayout({ heading: "Photos to review", body: escapeHtml(summary), actionLabel: "Review photos", actionUrl: url, footer }),
   };
 }
 
 async function sendDigest(prisma: PrismaClient, now: Date): Promise<number> {
-  const [pending, oldest, admins] = await Promise.all([
+  const [pending, removals, oldest, admins] = await Promise.all([
     prisma.photo.count({ where: { status: "PENDING_REVIEW" } }),
+    // Admin removals don't need a reminder: the Admin who did it already knows.
+    prisma.photo.count({ where: { status: "DELETION_REQUESTED", removalRequestedByRole: "MEMBER" } }),
     prisma.photo.findFirst({ where: { status: "PENDING_REVIEW" }, orderBy: { submittedAt: "asc" }, select: { submittedAt: true } }),
     prisma.user.findMany({ where: { deactivatedAt: null }, select: { email: true, role: true } }),
   ]);
-  if (pending === 0) return 0;
+  if (pending === 0 && removals === 0) return 0;
   const oldestDays = oldest?.submittedAt ? Math.floor((now.getTime() - oldest.submittedAt.getTime()) / (24 * 60 * MINUTE)) : 0;
   const appUrl = env().APP_URL;
   let sent = 0;
   for (const admin of admins.filter((user) => can(user.role, "photos:review"))) {
     try {
-      await sendEmail(reviewDigestEmail(admin.email, pending, oldestDays, appUrl), { kind: "photo-review-digest" });
+      await sendEmail(reviewDigestEmail(admin.email, pending, oldestDays, removals, appUrl), { kind: "photo-review-digest" });
       sent += 1;
     } catch {
       // sendEmail already logged the failure with context; keep going for the others.

@@ -141,3 +141,40 @@ test("files that aren't photos are refused", async ({ browser }) => {
   await failed.getByRole("button", { name: "Remove fake.jpg" }).click();
   await expect(member.getByRole("heading", { name: "Your unpublished photos (0)" })).toBeVisible();
 });
+
+test("a second admin takes a published photo down, then deletes it for good", async ({ browser, page: anonymous }) => {
+  const SECOND_ADMIN = { email: "brandon@example.test", name: "Brandon Test" };
+  await prisma.user.create({ data: { id: randomUUID(), name: SECOND_ADMIN.name, email: SECOND_ADMIN.email, role: "ADMIN", emailVerified: true } });
+
+  const erik = await signedInPage(browser, ADMIN.email);
+  await erik.goto("/admin/photos");
+  await erik.getByLabel("Choose photos").setInputFiles({ name: "IMG_4001.JPG", mimeType: "image/jpeg", buffer: await jpeg() });
+  await expect(erik.getByText("Ready below")).toBeVisible({ timeout: 30_000 });
+  const card = erik.getByRole("article", { name: "IMG_4001.JPG" });
+  await card.getByLabel("Alt text (required)").fill("Mike behind the kit");
+  await card.getByRole("button", { name: "Save and publish" }).click();
+  await expect(erik.getByRole("heading", { name: "Published (1)" })).toBeVisible();
+
+  await anonymous.goto("/photos");
+  const src = await expectImageLoaded(anonymous, "Mike behind the kit");
+
+  const brandon = await signedInPage(browser, SECOND_ADMIN.email);
+  await brandon.goto("/admin/photos");
+  const published = brandon.getByRole("article", { name: "Mike behind the kit" });
+  await published.getByText("Take off the site").click();
+  await published.getByLabel("Why? (optional)").fill("Out of focus");
+  brandon.once("dialog", (dialog) => void dialog.accept());
+  await published.getByRole("button", { name: "Remove from site" }).click();
+  await expect(brandon.getByRole("heading", { name: "Removed from site (1)" })).toBeVisible();
+  await expect(brandon.getByText("Removed by Brandon Test: Out of focus")).toBeVisible();
+
+  // Gone from the public page and the old file URL right away.
+  await anonymous.goto("/photos");
+  await expect(anonymous.getByText("Photos from our shows are coming soon.")).toBeVisible();
+  expect((await anonymous.request.get(src)).ok()).toBe(false);
+
+  brandon.once("dialog", (dialog) => void dialog.accept());
+  await brandon.getByRole("article", { name: "Removed: Mike behind the kit" }).getByRole("button", { name: "Delete permanently" }).click();
+  await expect(brandon.getByRole("heading", { name: "Removed from site (1)" })).toHaveCount(0);
+  await expect(brandon.getByRole("heading", { name: "Published (0)" })).toBeVisible();
+});

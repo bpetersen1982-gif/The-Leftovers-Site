@@ -13,7 +13,10 @@ import {
   approvePhotos,
   type BulkResult,
   deleteUnpublishedPhoto,
+  purgePhoto,
   rejectPhotos,
+  requestPhotoRemoval,
+  restorePhoto,
   submitPhotos,
   updatePhotoDetails,
 } from "@/lib/photos/workflow";
@@ -198,6 +201,54 @@ export async function reviewPhotosAction(_previous: ActionState, formData: FormD
       return reviewSummary(results, "Rejected");
     }
     return { ok: false, message: "Choose approve or reject." };
+  } catch (error) {
+    return expected(error);
+  }
+}
+
+// ---------------------------------------------------------------- removing published photos
+
+const FILES_WARNING =
+  " Its old link may still work for a little while; the files will be cleaned up when it's permanently deleted.";
+
+function refFrom(formData: FormData) {
+  return photoRefSchema.safeParse({ id: formData.get("id"), version: formData.get("version") });
+}
+
+/** Step 1 (Admins and Members): off the public site now; an Admin decides what happens next. */
+export async function removePhotoAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await requirePermission("photos:requestRemoval");
+  const ref = refFrom(formData);
+  if (!ref.success) return { ok: false, message: "That photo isn't valid." };
+  try {
+    const result = await requestPhotoRemoval(photoDeps(), actor, ref.data, String(formData.get("reason") ?? ""), await getRequestId());
+    refresh();
+    return { ok: true, message: `Taken off the site.${result.filesRemoved ? "" : FILES_WARNING}` };
+  } catch (error) {
+    return expected(error);
+  }
+}
+
+/** Step 2 (Admins): delete for good, or put it back. */
+export async function decideRemovalAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await requirePermission("photos:delete");
+  const ref = refFrom(formData);
+  if (!ref.success) return { ok: false, message: "That photo isn't valid." };
+  const intent = formData.get("intent");
+  const requestId = await getRequestId();
+  try {
+    const deps = photoDeps();
+    if (intent === "purge") {
+      const result = await purgePhoto(deps, actor, ref.data, requestId);
+      refresh();
+      return { ok: true, message: result.filesRemoved ? "Deleted for good." : "Deleted. Some files couldn't be removed from storage; that's been logged." };
+    }
+    if (intent === "restore") {
+      await restorePhoto(deps, actor, ref.data, requestId);
+      refresh();
+      return { ok: true, message: "Back on the site." };
+    }
+    return { ok: false, message: "Choose delete or put back." };
   } catch (error) {
     return expected(error);
   }

@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { can } from "@/lib/permissions";
 import { type BandPhoto, getBandPhotoBoard } from "@/lib/photos/queries";
 import { objectStorage } from "@/lib/storage";
-import { type CardPhoto, MyPhotoCard, PendingCard, PublishedCard, ReviewQueue } from "./photo-cards";
+import { type CardPhoto, MyPhotoCard, PendingCard, PublishedCard, RemovedCard, ReviewQueue } from "./photo-cards";
 import { PhotoUploader } from "./uploader";
 
 export const metadata: Metadata = { title: "Photos" };
@@ -21,6 +21,8 @@ function toCard(photo: BandPhoto): CardPhoto {
     credit: photo.credit,
     failureReason: photo.failureReason,
     rejectionReason: photo.rejectionReason,
+    removalReason: photo.removalReason,
+    removalRequestedByName: photo.removalRequestedByName,
     uploaderName: photo.uploaderName,
     isMine: photo.isMine,
     image: photo.image,
@@ -42,6 +44,7 @@ export default async function AdminPhotosPage() {
   }
   const board = await getBandPhotoBoard(db(), storage, viewer);
   const isReviewer = can(viewer.role, "photos:review");
+  const canDelete = can(viewer.role, "photos:delete");
   const publishesDirectly = can(viewer.role, "photos:publishDirectly");
   const submitLabel = publishesDirectly ? "Save and publish" : "Save and send for review";
 
@@ -112,13 +115,33 @@ export default async function AdminPhotosPage() {
             <ul className={GRID}>
               {board.published.map((photo) => (
                 <li key={`${photo.id}:${photo.version}`}>
-                  <PublishedCard photo={toCard(photo)} canEdit={isReviewer} />
+                  <PublishedCard photo={toCard(photo)} isAdmin={canDelete} />
                 </li>
               ))}
             </ul>
           </>
         )}
       </section>
+
+      {board.removed.length > 0 && (
+        <section id="removed" aria-labelledby="removed-heading" className="space-y-4">
+          <h2 id="removed-heading" className="font-heading text-xl font-bold tracking-wider uppercase">
+            Removed from site ({board.removed.length})
+          </h2>
+          <p className="text-cream/90">
+            {canDelete
+              ? "These are hidden from the public. Delete them for good, or put them back."
+              : "These are hidden from the public until an Admin deletes them or puts them back."}
+          </p>
+          <ul className={GRID}>
+            {board.removed.map((photo) => (
+              <li key={`${photo.id}:${photo.version}`}>
+                <RemovedCard photo={toCard(photo)} isAdmin={canDelete} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </div>
   );
 }

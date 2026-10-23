@@ -6,7 +6,7 @@ import type { PhotoImage } from "@/lib/photos/queries";
 import { INITIAL_ACTION_STATE } from "../action-state";
 import { DARK_INPUT_CLASS, FieldError, FormMessage, LABEL_CLASS, SECONDARY_BUTTON } from "../form-ui";
 import { useActionForm } from "../use-action-form";
-import { deletePhotoAction, reviewPhotosAction, savePhotoAction } from "./actions";
+import { decideRemovalAction, deletePhotoAction, removePhotoAction, reviewPhotosAction, savePhotoAction } from "./actions";
 
 /** What the cards need about a photo (serializable from the server page). */
 export interface CardPhoto {
@@ -19,6 +19,8 @@ export interface CardPhoto {
   readonly credit: string;
   readonly failureReason: string | null;
   readonly rejectionReason: string | null;
+  readonly removalReason: string | null;
+  readonly removalRequestedByName: string | null;
   readonly uploaderName: string;
   readonly isMine: boolean;
   readonly image: PhotoImage | null;
@@ -223,14 +225,48 @@ export function PendingCard({ photo }: { photo: CardPhoto }) {
   );
 }
 
-/** A published photo; Admins can fix its details. */
-export function PublishedCard({ photo, canEdit }: { photo: CardPhoto; canEdit: boolean }) {
+/**
+ * Takes a published photo off the site (APR-7 step 1). Admins and Members both can; the
+ * photo is hidden right away and an Admin then deletes it or puts it back.
+ */
+function RemoveForm({ photo, isAdmin }: { photo: CardPhoto; isAdmin: boolean }) {
+  const [state, onSubmit, pending] = useActionForm(removePhotoAction, INITIAL_ACTION_STATE);
+  const reasonId = useId();
+  return (
+    <form
+      onSubmit={(event) => {
+        if (!window.confirm("Take this photo off the public site now?")) {
+          event.preventDefault();
+          return;
+        }
+        onSubmit(event);
+      }}
+      className="space-y-2"
+    >
+      <input type="hidden" name="id" value={photo.id} />
+      <input type="hidden" name="version" value={photo.version} />
+      <div>
+        <label htmlFor={reasonId} className={LABEL_CLASS}>
+          Why? (optional)
+        </label>
+        <input id={reasonId} name="reason" maxLength={250} className={DARK_INPUT_CLASS} placeholder={isAdmin ? "For the activity log" : "So the Admins know"} />
+      </div>
+      <button type="submit" disabled={pending} className={SECONDARY_BUTTON}>
+        {isAdmin ? "Remove from site" : "Ask to remove"}
+      </button>
+      <FormMessage ok={state.ok} message={state.ok ? null : state.message} />
+    </form>
+  );
+}
+
+/** A published photo: Admins can fix details; everyone in the band can take it down. */
+export function PublishedCard({ photo, isAdmin }: { photo: CardPhoto; isAdmin: boolean }) {
   return (
     <article className="space-y-2 border border-olive/60 p-3" aria-label={photo.altText}>
       <Thumb photo={photo} />
       <p className="text-sm">{photo.altText}</p>
       <p className="text-xs text-cream/90">Uploaded by {photo.uploaderName}</p>
-      {canEdit && (
+      {isAdmin && (
         <details>
           <summary className="cursor-pointer text-sm underline">Edit details</summary>
           <div className="mt-3">
@@ -238,6 +274,53 @@ export function PublishedCard({ photo, canEdit }: { photo: CardPhoto; canEdit: b
           </div>
         </details>
       )}
+      <details>
+        <summary className="cursor-pointer text-sm underline">Take off the site</summary>
+        <div className="mt-3">
+          <RemoveForm photo={photo} isAdmin={isAdmin} />
+        </div>
+      </details>
+    </article>
+  );
+}
+
+/** Taken off the site; Admins delete it for good or put it back (APR-7 step 2). */
+export function RemovedCard({ photo, isAdmin }: { photo: CardPhoto; isAdmin: boolean }) {
+  const [state, onSubmit, pending] = useActionForm(decideRemovalAction, INITIAL_ACTION_STATE);
+  return (
+    <article className="space-y-2 border border-olive/60 p-3" aria-label={`Removed: ${photo.altText}`}>
+      <Thumb photo={photo} />
+      <p className="text-sm">{photo.altText}</p>
+      <p className="text-xs text-cream/90">
+        Removed by {photo.removalRequestedByName ?? "a former band member"}
+        {photo.removalReason ? `: ${photo.removalReason}` : ""}
+      </p>
+      {isAdmin ? (
+        <form
+          onSubmit={(event) => {
+            const submitter = (event.nativeEvent as SubmitEvent).submitter;
+            const purging = submitter instanceof HTMLButtonElement && submitter.value === "purge";
+            if (purging && !window.confirm("Delete this photo for good? This can't be undone.")) {
+              event.preventDefault();
+              return;
+            }
+            onSubmit(event);
+          }}
+          className="flex flex-wrap gap-2"
+        >
+          <input type="hidden" name="id" value={photo.id} />
+          <input type="hidden" name="version" value={photo.version} />
+          <button type="submit" name="intent" value="purge" disabled={pending} className="btn-primary disabled:opacity-60">
+            Delete permanently
+          </button>
+          <button type="submit" name="intent" value="restore" disabled={pending} className={SECONDARY_BUTTON}>
+            Put back on site
+          </button>
+        </form>
+      ) : (
+        <p className="text-sm">Hidden from the public. An Admin will delete it or put it back.</p>
+      )}
+      <FormMessage ok={state.ok} message={state.ok ? null : state.message} />
     </article>
   );
 }

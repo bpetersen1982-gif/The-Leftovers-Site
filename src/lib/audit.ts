@@ -33,6 +33,9 @@ export const AUDIT_ACTION_LABELS = {
   "photo.approve": "Approved photo",
   "photo.reject": "Rejected photo",
   "photo.delete": "Deleted unpublished photo",
+  "photo.remove": "Took photo off the site",
+  "photo.restore": "Put photo back on the site",
+  "photo.purge": "Permanently deleted photo",
 } as const;
 
 export type AuditAction = keyof typeof AUDIT_ACTION_LABELS;

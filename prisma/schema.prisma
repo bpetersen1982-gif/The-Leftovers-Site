@@ -43,6 +43,7 @@ model User {
   pushSubscriptions        PushSubscription[]
   photosUploaded           Photo[]             @relation("PhotoUploader")
   photosDecided            Photo[]             @relation("PhotoDecider")
+  photoRemovalsRequested   Photo[]             @relation("PhotoRemovalRequester")
   /// NOT-5: booking alerts by email / phone push. Both on by default.
   bookingEmailAlerts       Boolean             @default(true)
   bookingPushAlerts        Boolean             @default(true)
@@ -511,6 +512,8 @@ enum PhotoStatus {
   PENDING_REVIEW
   APPROVED
   REJECTED
+  /// Was public; a Member or Admin took it off the site (APR-7). An Admin deletes it or puts it back.
+  DELETION_REQUESTED
   /// The file couldn't be used (wrong type, corrupt, too large). Original already deleted.
   FAILED
 }
@@ -548,6 +551,11 @@ model Photo {
   decidedByRole    Role?
   rejectionReason  String?
   publishedAt      DateTime?   @db.Timestamptz(3)
+  removalRequestedAt     DateTime? @db.Timestamptz(3)
+  removalRequestedById   String?
+  removalRequestedBy     User?     @relation("PhotoRemovalRequester", fields: [removalRequestedById], references: [id])
+  removalRequestedByRole Role?
+  removalReason          String?
   /// Optimistic concurrency (APR-11): every state change bumps it.
   version          Int         @default(1)
   createdAt        DateTime    @default(now()) @db.Timestamptz(3)

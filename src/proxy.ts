@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { type StorageCspOrigins, storageCspOrigins } from "@/lib/storage-config";
 
 const REQUEST_ID_HEADER = "x-request-id";
 
@@ -7,16 +8,35 @@ function resolveRequestId(incoming: string | null): string {
   return incoming && /^[A-Za-z0-9-]{8,64}$/.test(incoming) ? incoming : crypto.randomUUID();
 }
 
+let storageOrigins: StorageCspOrigins | undefined;
+/** Photo storage origins (R2 / local S3), read once. A bad config fails loudly at startup elsewhere. */
+function photoOrigins(): StorageCspOrigins {
+  if (!storageOrigins) {
+    try {
+      storageOrigins = storageCspOrigins();
+    } catch {
+      storageOrigins = { img: [], connect: [] };
+    }
+  }
+  return storageOrigins;
+}
+
+function withOrigins(base: string, origins: readonly string[]): string {
+  return [base, ...origins].join(" ");
+}
+
 function buildCsp(nonce: string, isDev: boolean): string {
+  const photos = photoOrigins();
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
     `style-src 'self' 'nonce-${nonce}'`,
     // style="" attributes (used by React/next/image) can't run script; <style> tags still need the nonce.
     "style-src-attr 'unsafe-inline'",
-    "img-src 'self' blob: data:",
+    withOrigins("img-src 'self' blob: data:", photos.img),
     "font-src 'self'",
-    "connect-src 'self'",
+    // Browsers upload photos straight to storage with a signed URL.
+    withOrigins("connect-src 'self'", photos.connect),
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

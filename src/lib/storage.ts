@@ -73,6 +73,8 @@ export interface ObjectStorage {
   /** Deletes every private object under a prefix ending in "/" (e.g. a photo's variants). */
   deletePrivatePrefix(prefix: string): Promise<void>;
   deletePublic(keys: readonly string[]): Promise<void>;
+  /** Deletes every public object under a prefix ending in "/" (all public copies of a photo). */
+  deletePublicPrefix(prefix: string): Promise<void>;
   publicUrlFor(publicKey: string): string;
 }
 
@@ -119,6 +121,18 @@ export function createObjectStorage(config: StorageConfig): ObjectStorage {
         throw new Error(`Failed to delete ${failures.length} object(s) from ${bucket}: ${detail}`);
       }
     }
+  }
+
+  async function deletePrefix(bucket: string, prefix: string): Promise<void> {
+    assertSafeKey(prefix);
+    if (!prefix.endsWith("/")) throw new Error(`Refusing prefix without trailing slash: ${prefix}`);
+    let token: string | undefined;
+    do {
+      const page = await client.send(new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix, ContinuationToken: token }));
+      const keys = (page.Contents ?? []).flatMap((item) => (item.Key ? [item.Key] : []));
+      if (keys.length > 0) await deleteKeys(bucket, keys);
+      token = page.IsTruncated ? page.NextContinuationToken : undefined;
+    } while (token);
   }
 
   return {
@@ -206,20 +220,9 @@ export function createObjectStorage(config: StorageConfig): ObjectStorage {
 
     deletePrivate: (keys) => deleteKeys(config.privateBucket, keys),
 
-    async deletePrivatePrefix(prefix) {
-      assertSafeKey(prefix);
-      if (!prefix.endsWith("/")) throw new Error(`Refusing prefix without trailing slash: ${prefix}`);
-      let token: string | undefined;
-      do {
-        const page = await client.send(
-          new ListObjectsV2Command({ Bucket: config.privateBucket, Prefix: prefix, ContinuationToken: token }),
-        );
-        const keys = (page.Contents ?? []).flatMap((item) => (item.Key ? [item.Key] : []));
-        if (keys.length > 0) await deleteKeys(config.privateBucket, keys);
-        token = page.IsTruncated ? page.NextContinuationToken : undefined;
-      } while (token);
-    },
+    deletePrivatePrefix: (prefix) => deletePrefix(config.privateBucket, prefix),
     deletePublic: (keys) => deleteKeys(config.publicBucket, keys),
+    deletePublicPrefix: (prefix) => deletePrefix(config.publicBucket, prefix),
 
     publicUrlFor(publicKey) {
       assertSafeKey(publicKey);

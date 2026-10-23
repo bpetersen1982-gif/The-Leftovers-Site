@@ -44,6 +44,19 @@ export function newPublicPrefix(photoId: string): string {
   return `photos/${photoId}/${randomBytes(12).toString("hex")}`;
 }
 
+/** Parent of every public prefix this photo has ever had. */
+export function publicPhotoRoot(photoId: string): string {
+  return `photos/${photoId}/`;
+}
+
+/**
+ * Removes every public copy of a photo (current and any earlier publish). Throws on
+ * failure: callers must know if a removed photo could still be reachable by URL.
+ */
+export async function removePublicFiles(storage: ObjectStorage, photoId: string): Promise<void> {
+  await storage.deletePublicPrefix(publicPhotoRoot(photoId));
+}
+
 export function publicFileKey(prefix: string, file: string): string {
   return `${prefix}/${file}`;
 }
