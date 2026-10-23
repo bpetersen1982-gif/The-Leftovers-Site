@@ -18,11 +18,15 @@ export const AUDIT_ACTION_LABELS = {
   "settings.update": "Changed site settings",
   "availability.create": "Added out-of-office dates",
   "availability.delete": "Removed out-of-office dates",
+  "pricing.update": "Changed pricing",
+  "pricing.clearRates": "Cleared all rates",
+  "specialDate.add": "Added special date",
+  "specialDate.remove": "Removed special date",
 } as const;
 
 export type AuditAction = keyof typeof AUDIT_ACTION_LABELS;
 
-export type AuditTargetType = "user" | "invite" | "page" | "bandMember" | "siteSettings" | "availabilityBlock";
+export type AuditTargetType = "user" | "invite" | "page" | "bandMember" | "siteSettings" | "availabilityBlock" | "pricing" | "specialDate";
 
 export interface AuditActor {
   readonly id: string;

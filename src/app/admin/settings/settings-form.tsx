@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionForm } from "../use-action-form";
+
 import { SOCIAL_PLATFORMS, SOCIAL_PLATFORM_KEYS } from "@/lib/content/settings";
 import { type SaveState, saveSettingsAction } from "../content-actions";
 import { DARK_INPUT_CLASS, FieldError, FormMessage, LABEL_CLASS } from "../form-ui";
@@ -20,7 +21,7 @@ const EMAIL_FIELDS = [
 ] as const;
 
 export function SettingsForm({ initial }: { initial: Initial }) {
-  const [state, formAction, pending] = useActionState<SaveState, FormData>(saveSettingsAction, {
+  const [state, formAction, pending] = useActionForm<SaveState>(saveSettingsAction, {
     ok: false,
     message: null,
     version: initial.version,
@@ -28,7 +29,7 @@ export function SettingsForm({ initial }: { initial: Initial }) {
   const error = (name: string) => state.fieldErrors?.[name];
 
   return (
-    <form action={formAction} className="max-w-xl space-y-8">
+    <form onSubmit={formAction} className="max-w-xl space-y-8">
       <input type="hidden" name="version" value={state.version ?? initial.version} />
 
       <fieldset className="space-y-4">

@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionForm } from "../use-action-form";
+import { useEffect, useRef } from "react";
 import { INITIAL_ACTION_STATE } from "../action-state";
 import { type SaveState, createMemberAction, deleteMemberAction, moveMemberAction, updateMemberAction } from "../content-actions";
 import { DARK_INPUT_CLASS, FieldError, FormMessage, FormattingHelp, INPUT_CLASS, LABEL_CLASS, SECONDARY_BUTTON } from "../form-ui";
@@ -65,13 +66,13 @@ function MemberFields({
 }
 
 export function AddMemberForm() {
-  const [state, formAction, pending] = useActionState(createMemberAction, INITIAL_ACTION_STATE);
+  const [state, formAction, pending] = useActionForm(createMemberAction, INITIAL_ACTION_STATE);
   const formRef = useRef<HTMLFormElement>(null);
   useEffect(() => {
     if (state.ok) formRef.current?.reset();
   }, [state]);
   return (
-    <form ref={formRef} action={formAction} className="mt-4 space-y-4">
+    <form ref={formRef} onSubmit={formAction} className="mt-4 space-y-4">
       <MemberFields idPrefix="new-member" errors={state.fieldErrors} dark={false} />
       <div className="flex flex-wrap items-center gap-4">
         <button type="submit" disabled={pending} className="btn-primary disabled:opacity-60">
@@ -84,13 +85,13 @@ export function AddMemberForm() {
 }
 
 export function MemberEditor({ member, isFirst, isLast }: { member: MemberDraft; isFirst: boolean; isLast: boolean }) {
-  const [state, formAction, pending] = useActionState<SaveState, FormData>(updateMemberAction, {
+  const [state, formAction, pending] = useActionForm<SaveState>(updateMemberAction, {
     ok: false,
     message: null,
     version: member.version,
   });
-  const [moveState, moveAction, movePending] = useActionState(moveMemberAction, INITIAL_ACTION_STATE);
-  const [deleteState, deleteAction, deletePending] = useActionState(deleteMemberAction, INITIAL_ACTION_STATE);
+  const [moveState, moveAction, movePending] = useActionForm(moveMemberAction, INITIAL_ACTION_STATE);
+  const [deleteState, deleteAction, deletePending] = useActionForm(deleteMemberAction, INITIAL_ACTION_STATE);
   const idPrefix = `member-${member.id}`;
 
   return (
@@ -100,7 +101,7 @@ export function MemberEditor({ member, isFirst, isLast }: { member: MemberDraft;
           {member.name}
           {!member.isVisible && <span className="ml-2 text-sm text-cream/90">(hidden)</span>}
         </h2>
-        <form action={moveAction} className="flex gap-2">
+        <form onSubmit={moveAction} className="flex gap-2">
           <input type="hidden" name="id" value={member.id} />
           <button type="submit" name="direction" value="up" disabled={isFirst || movePending} aria-label={`Move ${member.name} up`} className={SECONDARY_BUTTON}>
             ↑
@@ -112,7 +113,7 @@ export function MemberEditor({ member, isFirst, isLast }: { member: MemberDraft;
       </div>
       <FormMessage ok={moveState.ok} message={moveState.message} />
 
-      <form action={formAction} className="mt-4 space-y-4">
+      <form onSubmit={formAction} className="mt-4 space-y-4">
         <input type="hidden" name="id" value={member.id} />
         <input type="hidden" name="version" value={state.version ?? member.version} />
         <MemberFields idPrefix={idPrefix} defaults={member} errors={state.fieldErrors} dark />
@@ -124,7 +125,7 @@ export function MemberEditor({ member, isFirst, isLast }: { member: MemberDraft;
         </div>
       </form>
 
-      <form action={deleteAction} className="mt-4 flex flex-wrap items-center gap-3 border-t border-olive/40 pt-3 text-sm">
+      <form onSubmit={deleteAction} className="mt-4 flex flex-wrap items-center gap-3 border-t border-olive/40 pt-3 text-sm">
         <input type="hidden" name="id" value={member.id} />
         <label className="flex items-center gap-2">
           <input type="checkbox" name="confirm" value="yes" required />

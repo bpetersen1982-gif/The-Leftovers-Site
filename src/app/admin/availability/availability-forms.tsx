@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionForm } from "../use-action-form";
+import { useState } from "react";
 import { INITIAL_ACTION_STATE } from "../action-state";
 import { FieldError, FormMessage, INPUT_CLASS, LABEL_CLASS, SECONDARY_BUTTON } from "../form-ui";
 import { addAvailabilityAction, deleteAvailabilityAction } from "./actions";
@@ -16,7 +17,7 @@ export function AddAvailabilityForm({
   viewerId: string;
   users: { id: string; name: string }[];
 }) {
-  const [state, formAction, pending] = useActionState(addAvailabilityAction, INITIAL_ACTION_STATE);
+  const [state, formAction, pending] = useActionForm(addAvailabilityAction, INITIAL_ACTION_STATE);
   const [scope, setScope] = useState<"MEMBER" | "BAND">("MEMBER");
   const [startDate, setStartDate] = useState("");
   // Reset after a successful save. Adjusting state during render when the action result
@@ -35,7 +36,7 @@ export function AddAvailabilityForm({
   const describe = (name: string) => (error(name) ? `avail-${name}-error` : undefined);
 
   return (
-    <form key={resetKey} action={formAction} noValidate className="mt-4 grid gap-4 sm:grid-cols-2">
+    <form key={resetKey} onSubmit={formAction} noValidate className="mt-4 grid gap-4 sm:grid-cols-2">
       {isAdmin && (
         <fieldset className="sm:col-span-2">
           <legend className={LABEL_CLASS}>Who</legend>
@@ -102,9 +103,9 @@ export function AddAvailabilityForm({
 }
 
 export function DeleteAvailabilityButton({ id, label }: { id: string; label: string }) {
-  const [state, formAction, pending] = useActionState(deleteAvailabilityAction, INITIAL_ACTION_STATE);
+  const [state, formAction, pending] = useActionForm(deleteAvailabilityAction, INITIAL_ACTION_STATE);
   return (
-    <form action={formAction} className="flex items-center gap-3">
+    <form onSubmit={formAction} className="flex items-center gap-3">
       <input type="hidden" name="id" value={id} />
       <button type="submit" disabled={pending} aria-label={`Remove ${label}`} className={SECONDARY_BUTTON}>
         {pending ? "Removing…" : "Remove"}

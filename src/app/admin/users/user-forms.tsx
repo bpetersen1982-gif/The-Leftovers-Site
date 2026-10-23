@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionForm } from "../use-action-form";
+import { useEffect, useRef } from "react";
 import type { Role } from "@/generated/prisma/enums";
 import { INITIAL_ACTION_STATE } from "../action-state";
 import { changeRoleAction, deactivateUserAction, inviteUserAction, revokeInviteAction } from "../actions";
@@ -23,7 +24,7 @@ function Message({ ok, message }: { ok: boolean; message: string | null }) {
 }
 
 export function InviteForm() {
-  const [state, formAction, pending] = useActionState(inviteUserAction, INITIAL_ACTION_STATE);
+  const [state, formAction, pending] = useActionForm(inviteUserAction, INITIAL_ACTION_STATE);
   const formRef = useRef<HTMLFormElement>(null);
   useEffect(() => {
     if (state.ok) formRef.current?.reset();
@@ -32,7 +33,7 @@ export function InviteForm() {
   const error = (field: string) => state.fieldErrors?.[field];
 
   return (
-    <form ref={formRef} action={formAction} noValidate className="mt-4 grid gap-4 sm:grid-cols-3">
+    <form ref={formRef} onSubmit={formAction} noValidate className="mt-4 grid gap-4 sm:grid-cols-3">
       <div>
         <label htmlFor="invite-name" className={LABEL}>
           Name
@@ -76,9 +77,9 @@ export function InviteForm() {
 }
 
 export function RevokeInviteButton({ inviteId, name }: { inviteId: string; name: string }) {
-  const [state, formAction, pending] = useActionState(revokeInviteAction, INITIAL_ACTION_STATE);
+  const [state, formAction, pending] = useActionForm(revokeInviteAction, INITIAL_ACTION_STATE);
   return (
-    <form action={formAction} className="flex items-center gap-3">
+    <form onSubmit={formAction} className="flex items-center gap-3">
       <input type="hidden" name="inviteId" value={inviteId} />
       <button type="submit" disabled={pending} aria-label={`Cancel invite for ${name}`}
         className="border border-cream/70 px-3 py-1 font-heading tracking-wider uppercase hover:bg-cream hover:text-ink disabled:opacity-60">
@@ -90,15 +91,15 @@ export function RevokeInviteButton({ inviteId, name }: { inviteId: string; name:
 }
 
 export function UserControls({ userId, name, role, isSelf }: { userId: string; name: string; role: Role; isSelf: boolean }) {
-  const [roleState, roleAction, rolePending] = useActionState(changeRoleAction, INITIAL_ACTION_STATE);
-  const [removeState, removeAction, removePending] = useActionState(deactivateUserAction, INITIAL_ACTION_STATE);
+  const [roleState, roleAction, rolePending] = useActionForm(changeRoleAction, INITIAL_ACTION_STATE);
+  const [removeState, removeAction, removePending] = useActionForm(deactivateUserAction, INITIAL_ACTION_STATE);
   const nextRole: Role = role === "ADMIN" ? "MEMBER" : "ADMIN";
   const nextLabel = nextRole === "ADMIN" ? "Make Admin" : "Make Band Member";
 
   return (
     <div className="flex flex-col gap-3 sm:items-end">
       <p className="font-heading tracking-wider uppercase">{role === "ADMIN" ? "Admin" : "Band Member"}</p>
-      <form action={roleAction} className="flex flex-wrap items-center gap-3">
+      <form onSubmit={roleAction} className="flex flex-wrap items-center gap-3">
         <input type="hidden" name="userId" value={userId} />
         <input type="hidden" name="role" value={nextRole} />
         <button type="submit" disabled={rolePending} aria-label={`${nextLabel}: ${name}`}
@@ -108,7 +109,7 @@ export function UserControls({ userId, name, role, isSelf }: { userId: string; n
       </form>
       <Message ok={roleState.ok} message={roleState.message} />
       {!isSelf && (
-        <form action={removeAction} className="flex flex-wrap items-center gap-3">
+        <form onSubmit={removeAction} className="flex flex-wrap items-center gap-3">
           <input type="hidden" name="userId" value={userId} />
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="confirm" value="yes" required />

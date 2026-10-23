@@ -1,7 +1,8 @@
 "use client";
 
+import { useActionForm } from "../../use-action-form";
 import Link from "next/link";
-import { useActionState, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { BlockContent } from "@/components/block-content";
 import { parseBlocks } from "@/lib/content/blocks";
 import type { PageSlug } from "@/lib/content/pages";
@@ -19,7 +20,7 @@ export function PageEditor({
   initialVersion: number;
   publicPath: string;
 }) {
-  const [state, formAction, pending] = useActionState<SaveState, FormData>(savePageAction, {
+  const [state, formAction, pending] = useActionForm<SaveState>(savePageAction, {
     ok: false,
     message: null,
     version: initialVersion,
@@ -30,7 +31,7 @@ export function PageEditor({
 
   return (
     <div className="grid gap-8 lg:grid-cols-2">
-      <form action={formAction} className="space-y-3">
+      <form onSubmit={formAction} className="space-y-3">
         <input type="hidden" name="slug" value={slug} />
         <input type="hidden" name="version" value={version} />
         <label htmlFor="content" className={LABEL_CLASS}>

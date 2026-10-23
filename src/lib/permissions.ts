@@ -21,6 +21,7 @@ export const PERMISSIONS = {
   "availability:manageOwn": ["ADMIN", "MEMBER"],
   "availability:manageAll": ["ADMIN"],
   "availability:manageBand": ["ADMIN"],
+  "pricing:manage": ["ADMIN"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

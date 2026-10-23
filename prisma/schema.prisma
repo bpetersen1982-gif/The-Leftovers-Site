@@ -241,3 +241,59 @@ model AvailabilityBlock {
   @@index([userId])
   @@map("availability_block")
 }
+
+// ---------------------------------------------------------------- pricing
+
+enum EventType {
+  BAR_CLUB
+  FESTIVAL
+  WEDDING
+  GRADUATION
+  PRIVATE_PARTY
+  CORPORATE
+  OTHER
+}
+
+enum DayCategory {
+  SUN_THU
+  FRI_SAT
+  /// Admin-listed dates such as Dec 31 or July 4.
+  SPECIAL
+}
+
+/// Booking rules (requirements BOOK-3, ELIG-2a, ELIG-4). Singleton row, id = 1.
+model PricingSettings {
+  id                 Int      @id @default(1)
+  minSets            Int      @default(1)
+  maxSets            Int      @default(4)
+  quoteValidityHours Int      @default(72)
+  minNoticeDays      Int      @default(7)
+  travelRadiusMiles  Int      @default(60)
+  /// Center point for the travel radius, as a ZIP code (default Lincoln).
+  originZip          String   @default("68508")
+  version            Int      @default(1)
+  updatedAt          DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("pricing_settings")
+}
+
+/// One cell of the rate grid. No row = "require a quote" (contact path).
+model RateRule {
+  id              String      @id @default(uuid()) @db.Uuid
+  eventType       EventType
+  dayCategory     DayCategory
+  ratePerSetCents Int
+  updatedAt       DateTime    @updatedAt @db.Timestamptz(3)
+
+  @@unique([eventType, dayCategory])
+  @@map("rate_rule")
+}
+
+/// Dates priced with the SPECIAL column (requirements RATE-3).
+model SpecialDate {
+  date      DateTime @id @db.Date
+  label     String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@map("special_date")
+}
