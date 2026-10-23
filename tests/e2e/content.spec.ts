@@ -30,11 +30,6 @@ test("public pages render default copy with shared navigation", async ({ page })
     await expect(page.getByRole("heading", { level: 1, name: heading })).toBeVisible();
     await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
   }
-  // Login is reachable from the header on every public page.
-  await page.goto("/");
-  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Band login" }).click();
-  await expect(page).toHaveURL(/\/login$/);
-
   await page.goto("/members");
   await expect(page.getByText("Band lineup coming soon.")).toBeVisible();
   await page.goto("/copyright");
@@ -132,8 +127,6 @@ test("settings validate social links and update the footer", async ({ page }) =>
   await expect(page.getByText("Settings saved.")).toBeVisible();
 
   await page.goto("/");
-  // Signed in, the header link goes to admin instead of login.
-  await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Band admin" })).toHaveAttribute("href", "/admin");
   const footer = page.getByRole("contentinfo");
   await expect(footer.getByRole("link", { name: /Instagram/ })).toHaveAttribute("href", "https://www.instagram.com/theleftovers");
   await expect(footer.getByRole("link", { name: "bookings@example.test" })).toBeVisible();

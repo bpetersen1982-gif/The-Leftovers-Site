@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { getCurrentUser } from "@/lib/auth/session";
 import { getSiteSettings } from "@/lib/content/service";
 import { SOCIAL_PLATFORMS } from "@/lib/content/settings";
 import { db } from "@/lib/db";
@@ -15,7 +14,7 @@ const NAV = [
 
 /** Public page frame: header nav, main content, footer with contact and social links. */
 export async function SiteChrome({ children }: { children: ReactNode }) {
-  const [settings, viewer] = await Promise.all([getSiteSettings(db()), getCurrentUser()]);
+  const settings = await getSiteSettings(db());
   return (
     <div className="flex min-h-dvh flex-col">
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:bg-cream focus:px-3 focus:py-2 focus:text-ink">
@@ -37,15 +36,6 @@ export async function SiteChrome({ children }: { children: ReactNode }) {
                 <a href={`mailto:${settings.bookingEmail}`} className="text-red-text hover:underline">
                   Book us
                 </a>
-              </li>
-              <li>
-                {/* Signed-in band members go straight to admin; everyone else to login. */}
-                <Link
-                  href={viewer ? "/admin" : "/login"}
-                  className="border border-cream/70 px-2 py-0.5 hover:bg-cream hover:text-ink"
-                >
-                  {viewer ? "Band admin" : "Band login"}
-                </Link>
               </li>
             </ul>
           </nav>
