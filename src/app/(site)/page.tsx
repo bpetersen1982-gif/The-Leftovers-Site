@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import { BlockContent } from "@/components/block-content";
 import { getPage, getSiteSettings } from "@/lib/content/service";
 import { db } from "@/lib/db";
@@ -72,9 +73,14 @@ export default async function HomePage() {
           <p className="mt-3 leading-relaxed">
             Bars, weddings, festivals, graduations, private parties. Tell us your date and we&apos;ll get back to you.
           </p>
-          <a href={`mailto:${settings.bookingEmail}`} className="btn-primary mt-5 break-all">
-            {settings.bookingEmail}
-          </a>
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-4">
+            <Link href="/book" className="btn-primary">
+              Check dates
+            </Link>
+            <a href={`mailto:${settings.bookingEmail}`} className="font-semibold break-all underline">
+              {settings.bookingEmail}
+            </a>
+          </div>
         </div>
       </section>
 

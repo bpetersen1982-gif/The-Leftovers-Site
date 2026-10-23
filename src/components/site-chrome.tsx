@@ -33,9 +33,9 @@ export async function SiteChrome({ children }: { children: ReactNode }) {
                 </li>
               ))}
               <li>
-                <a href={`mailto:${settings.bookingEmail}`} className="text-red-text hover:underline">
+                <Link href="/book" className="text-red-text hover:underline">
                   Book us
-                </a>
+                </Link>
               </li>
             </ul>
           </nav>

@@ -38,6 +38,8 @@ model User {
   invitesUsed   Invite[]     @relation("InviteAcceptedBy")
   auditEntries  AuditLog[]
   bandMember    BandMember?
+  availabilityBlocks       AvailabilityBlock[] @relation("AvailabilityOwner")
+  availabilityBlocksAdded  AvailabilityBlock[] @relation("AvailabilityCreator")
 
   @@index([role, deactivatedAt])
   @@map("user")
@@ -208,4 +210,34 @@ model SiteSettings {
   updatedAt      DateTime @updatedAt @db.Timestamptz(3)
 
   @@map("site_settings")
+}
+
+// ---------------------------------------------------------------- availability
+
+enum AvailabilityScope {
+  /// One band member is out; public sees "Limited availability".
+  MEMBER
+  /// The whole band is off; public sees "Unavailable" and can't request.
+  BAND
+}
+
+/// Out-of-office and band-off date ranges (requirements BOOK-19). Dates are calendar
+/// dates in America/Chicago, inclusive on both ends; no time component.
+model AvailabilityBlock {
+  id          String            @id @default(uuid()) @db.Uuid
+  scope       AvailabilityScope
+  startDate   DateTime          @db.Date
+  endDate     DateTime          @db.Date
+  /// The member who is out (MEMBER scope). Null for BAND scope.
+  userId      String?
+  user        User?             @relation("AvailabilityOwner", fields: [userId], references: [id], onDelete: Cascade)
+  /// Private: visible to the owner and Admins only, never public.
+  note        String            @default("")
+  createdById String
+  createdBy   User              @relation("AvailabilityCreator", fields: [createdById], references: [id])
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+
+  @@index([startDate, endDate])
+  @@index([userId])
+  @@map("availability_block")
 }

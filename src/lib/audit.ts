@@ -16,11 +16,13 @@ export const AUDIT_ACTION_LABELS = {
   "member.delete": "Deleted band member",
   "member.reorder": "Reordered band members",
   "settings.update": "Changed site settings",
+  "availability.create": "Added out-of-office dates",
+  "availability.delete": "Removed out-of-office dates",
 } as const;
 
 export type AuditAction = keyof typeof AUDIT_ACTION_LABELS;
 
-export type AuditTargetType = "user" | "invite" | "page" | "bandMember" | "siteSettings";
+export type AuditTargetType = "user" | "invite" | "page" | "bandMember" | "siteSettings" | "availabilityBlock";
 
 export interface AuditActor {
   readonly id: string;

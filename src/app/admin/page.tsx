@@ -67,13 +67,19 @@ export default async function AdminHomePage() {
             </>
           )}
           <li>
+            <Link href="/admin/availability" className="underline">
+              Availability
+            </Link>
+            : mark the dates you can&apos;t play.
+          </li>
+          <li>
             <Link href="/admin/account" className="underline">
               My account
             </Link>
             : manage your passkeys.
           </li>
         </ul>
-        <p className="mt-4 text-cream/90">Booking requests, photos, and the fan wall arrive in the next waves.</p>
+        <p className="mt-4 text-cream/90">Booking requests and quotes are next, then photos and the fan wall.</p>
       </section>
     </div>
   );
