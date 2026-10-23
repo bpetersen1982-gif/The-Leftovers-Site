@@ -28,6 +28,8 @@ export default defineConfig({
     timeout: 60_000,
     env: {
       LEFTOVERS_DATABASE_URL: TEST_DATABASE_URL,
+      // Explicit, so a stray LEFTOVERS_ENV=production in the shell can never leak in.
+      LEFTOVERS_ENV: "e2e",
       APP_URL: BASE_URL,
       BETTER_AUTH_SECRET: "e2e-only-secret-not-used-anywhere-else-000",
       MAIL_TRANSPORT: "smtp",

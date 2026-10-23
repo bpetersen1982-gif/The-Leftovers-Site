@@ -4,7 +4,7 @@ import type { Role } from "@/generated/prisma/enums";
  * Permission matrix (requirements §2.3). The single source of truth for "who can do what";
  * every server action checks through `can()`. UI hiding is cosmetic only.
  *
- * Only permissions implemented in the current wave are listed; later waves add theirs here.
+ * Only permissions implemented so far are listed; later waves add theirs here.
  */
 export const PERMISSIONS = {
   "admin:access": ["ADMIN", "MEMBER"],
@@ -14,6 +14,9 @@ export const PERMISSIONS = {
   "users:deactivate": ["ADMIN"],
   "audit:view": ["ADMIN"],
   "account:managePasskeys": ["ADMIN", "MEMBER"],
+  "content:edit": ["ADMIN"],
+  "members:edit": ["ADMIN"],
+  "settings:edit": ["ADMIN"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

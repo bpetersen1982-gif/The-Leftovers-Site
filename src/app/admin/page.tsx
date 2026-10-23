@@ -33,12 +33,38 @@ export default async function AdminHomePage() {
         </h2>
         <ul className="mt-3 list-disc space-y-2 pl-6">
           {isAdmin && (
-            <li>
-              <Link href="/admin/users" className="underline">
-                Users
-              </Link>
-              : invite band members, change roles, remove people.
-            </li>
+            <>
+              <li>
+                <Link href="/admin/pages" className="underline">
+                  Pages
+                </Link>
+                : edit the Home intro, About, Contact, Privacy, and Copyright text.
+              </li>
+              <li>
+                <Link href="/admin/members" className="underline">
+                  Members
+                </Link>
+                : the public lineup, instruments, and bios.
+              </li>
+              <li>
+                <Link href="/admin/users" className="underline">
+                  Users
+                </Link>
+                : invite band members, change roles, remove people.
+              </li>
+              <li>
+                <Link href="/admin/settings" className="underline">
+                  Settings
+                </Link>
+                : contact emails and social links.
+              </li>
+              <li>
+                <Link href="/admin/audit" className="underline">
+                  Activity
+                </Link>
+                : who changed what, and when.
+              </li>
+            </>
           )}
           <li>
             <Link href="/admin/account" className="underline">

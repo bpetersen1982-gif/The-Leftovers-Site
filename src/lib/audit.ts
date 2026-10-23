@@ -2,14 +2,25 @@ import type { Prisma } from "@/generated/prisma/client";
 import type { Role } from "@/generated/prisma/enums";
 
 /** Every audited action. Adding one here is required before it can be logged. */
-export type AuditAction =
-  | "user.bootstrap"
-  | "invite.create"
-  | "invite.revoke"
-  | "invite.accept"
-  | "user.roleChange"
-  | "user.deactivate"
-  | "user.reactivate";
+export const AUDIT_ACTION_LABELS = {
+  "user.bootstrap": "Created initial Admin",
+  "invite.create": "Sent invite",
+  "invite.revoke": "Cancelled invite",
+  "invite.accept": "Accepted invite",
+  "user.roleChange": "Changed role",
+  "user.deactivate": "Removed user",
+  "user.reactivate": "Reactivated user",
+  "page.update": "Edited page",
+  "member.create": "Added band member",
+  "member.update": "Edited band member",
+  "member.delete": "Deleted band member",
+  "member.reorder": "Reordered band members",
+  "settings.update": "Changed site settings",
+} as const;
+
+export type AuditAction = keyof typeof AUDIT_ACTION_LABELS;
+
+export type AuditTargetType = "user" | "invite" | "page" | "bandMember" | "siteSettings";
 
 export interface AuditActor {
   readonly id: string;
@@ -19,7 +30,7 @@ export interface AuditActor {
 export interface AuditEntry {
   readonly actor: AuditActor | null;
   readonly action: AuditAction;
-  readonly targetType: "user" | "invite";
+  readonly targetType: AuditTargetType;
   readonly targetId: string;
   readonly before?: Prisma.InputJsonValue;
   readonly after?: Prisma.InputJsonValue;
