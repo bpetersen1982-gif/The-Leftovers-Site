@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { bandEmail, formatTime } from "@/lib/booking/notifications";
+import { CONFIRM_TEMPLATE, DECLINE_TEMPLATE } from "@/lib/booking/prospect-emails";
+import { bookingFromAddress } from "@/lib/mail/mailer";
 import { performanceMinutes, phoneSchema, setsMismatch, suggestedSets, timeSchema, whenSchema } from "@/lib/booking/validation";
 
 const summary = {
@@ -82,5 +84,20 @@ describe("booking form helpers", () => {
     expect(schema.safeParse({ ...base, endTime: "20:00" }).success).toBe(false);
     expect(schema.safeParse({ ...base, flexible: true, eventDate: "" }).success).toBe(true);
     expect(schema.safeParse({ ...base, eventType: "RAVE" }).success).toBe(false);
+  });
+});
+
+describe("prospect emails", () => {
+  it("sends booking mail from booking@ on the verified sending domain", () => {
+    expect(bookingFromAddress("The Leftovers <no-reply@mail.theleftoversband.com>")).toBe("The Leftovers Booking <booking@mail.theleftoversband.com>");
+    expect(bookingFromAddress("no-reply@example.test")).toBe("The Leftovers Booking <booking@example.test>");
+    expect(() => bookingFromAddress("nobody")).toThrow();
+  });
+
+  it("builds editable decline and confirmation drafts", () => {
+    expect(DECLINE_TEMPLATE("Saturday, November 14, 2026")).toContain("for Saturday, November 14, 2026");
+    const confirm = CONFIRM_TEMPLATE({ date: "Sat", time: "8:00 PM–12:00 AM", loadIn: null, sets: 4, price: "$1,500" });
+    expect(confirm).toContain("Agreed price: $1,500");
+    expect(confirm).not.toContain("Load-in");
   });
 });

@@ -86,7 +86,12 @@ export async function listInbox(prisma: PrismaClient, viewer: { role: Role }, fi
 }
 
 export interface InboxDetail extends InboxRow {
+  readonly version: number;
   readonly kind: "WIZARD" | "DATE_CONTACT";
+  readonly loadInTime: string | null;
+  /** Admin-only (null for viewers without booking:viewFinancials). */
+  readonly agreedPriceCents: number | null;
+  readonly confirmedAt: Date | null;
   readonly startTime: string | null;
   readonly endTime: string | null;
   readonly email: string;
@@ -101,7 +106,7 @@ export interface InboxDetail extends InboxRow {
   readonly distanceMiles: number | null;
   readonly ineligibleReasons: readonly string[];
   readonly quote: { ratePerSetCents: number; sets: number; totalCents: number; expiresAt: Date } | null;
-  readonly claim: { kind: "PENDING" | "BOOKED" } | null;
+  readonly claim: { kind: "PENDING" | "BOOKED"; expiresAt: Date | null } | null;
   readonly sameDate: readonly { id: string; reference: string; statusLabel: string; contactName: string; eventTypeLabel: string }[];
   readonly timeline: readonly { id: string; kind: string; body: string; fromStatus: string | null; toStatus: string | null; authorName: string; createdAt: Date }[];
 }
@@ -112,7 +117,7 @@ export async function getInboxDetail(prisma: PrismaClient, viewer: { role: Role 
     where: { id },
     include: {
       quotes: { where: { supersededAt: null }, orderBy: { createdAt: "desc" }, take: 1 },
-      claim: { select: { kind: true } },
+      claim: { select: { kind: true, expiresAt: true } },
       events: { orderBy: { createdAt: "asc" } },
     },
   });
@@ -135,7 +140,11 @@ export async function getInboxDetail(prisma: PrismaClient, viewer: { role: Role 
   return {
     id: row.id,
     reference: row.reference,
+    version: row.version,
     kind: row.kind,
+    loadInTime: row.loadInTime,
+    agreedPriceCents: showMoney ? row.agreedPriceCents : null,
+    confirmedAt: row.confirmedAt,
     status: row.status,
     statusLabel: STATUS_LABELS[row.status],
     isConflict: row.isConflict,
@@ -162,7 +171,8 @@ export async function getInboxDetail(prisma: PrismaClient, viewer: { role: Role 
     totalCents: showMoney && quote ? quote.totalCents : null,
     quote: showMoney && quote ? { ratePerSetCents: quote.ratePerSetCents, sets: quote.sets, totalCents: quote.totalCents, expiresAt: quote.expiresAt } : null,
     quoteExpired: row.status === "QUOTED" && quote !== undefined && quote.expiresAt <= now,
-    claim: row.claim,
+    // Expired holds no longer count (see claims.ts).
+    claim: row.claim && (row.claim.expiresAt === null || row.claim.expiresAt > now) ? row.claim : null,
     sameDate: sameDate.map((other) => ({
       id: other.id,
       reference: other.reference,

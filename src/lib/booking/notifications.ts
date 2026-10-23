@@ -19,7 +19,15 @@ import type { QuoteView } from "./requests";
  * database and visible in the booking inbox regardless.
  */
 
-export type BandEvent = "NEW_REQUEST" | "QUOTE_ACCEPTED" | "QUOTE_DECLINED" | "DATE_TAKEN" | "DATE_CONTACT";
+export type BandEvent =
+  | "NEW_REQUEST"
+  | "QUOTE_ACCEPTED"
+  | "QUOTE_DECLINED"
+  | "DATE_TAKEN"
+  | "DATE_CONTACT"
+  | "BOOKED"
+  | "RELEASED_BY_OVERRIDE"
+  | "CANCELLED";
 
 const EVENT_HEADLINES: Record<BandEvent, string> = {
   NEW_REQUEST: "New booking request",
@@ -27,6 +35,9 @@ const EVENT_HEADLINES: Record<BandEvent, string> = {
   QUOTE_DECLINED: "Quote declined",
   DATE_TAKEN: "Tried to accept, but the date was already taken",
   DATE_CONTACT: "Someone wants to talk about a date",
+  BOOKED: "Gig booked",
+  RELEASED_BY_OVERRIDE: "Bumped by an override: contact them",
+  CANCELLED: "Booking cancelled",
 };
 
 export { formatTime };

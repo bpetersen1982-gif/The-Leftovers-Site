@@ -378,6 +378,12 @@ model BookingRequest {
   responseNote     String             @default("")
   respondedAt      DateTime?          @db.Timestamptz(3)
   submittedAt      DateTime?          @db.Timestamptz(3)
+  /// Set when an Admin confirms (requirements BOOK-15). Admin-only, like quotes.
+  agreedPriceCents Int?
+  /// Load-in time, "HH:MM" local.
+  loadInTime       String?
+  confirmedAt      DateTime?          @db.Timestamptz(3)
+  confirmedById    String?
   version          Int                @default(1)
   createdAt        DateTime           @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime           @updatedAt @db.Timestamptz(3)
@@ -426,6 +432,10 @@ model DateClaim {
   kind      ClaimKind
   requestId String         @unique @db.Uuid
   request   BookingRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  /// Manual Admin holds expire (BOOK-17); accepted quotes and bookings don't (null).
+  expiresAt DateTime?      @db.Timestamptz(3)
+  /// Null = created by the prospect accepting a quote.
+  createdById String?
   createdAt DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt DateTime       @updatedAt @db.Timestamptz(3)
 
@@ -436,6 +446,8 @@ enum BookingEventKind {
   STATUS
   NOTE
   CONTACTED
+  /// An email sent to the prospect from the site (reply, decline, quote, confirmation).
+  EMAIL
 }
 
 /// Timeline of a request: status changes, internal notes, "contacted" logs (BOOK-13).

@@ -26,6 +26,7 @@ export const PERMISSIONS = {
   "booking:viewFinancials": ["ADMIN"],
   "booking:addNote": ["ADMIN", "MEMBER"],
   "booking:manage": ["ADMIN"],
+  "booking:reply": ["ADMIN", "MEMBER"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

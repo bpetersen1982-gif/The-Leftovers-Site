@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getPricing } from "@/lib/booking/pricing";
+import { lookupZip } from "@/lib/booking/zip-distance";
 import { notifyBand, sendProspectConfirmation } from "@/lib/booking/notifications";
 import {
   BookingError,
@@ -67,14 +68,18 @@ async function parseWhen(raw: unknown) {
 }
 
 /** FUN-2: called when the prospect finishes step 2, so Admins can follow up if they leave. */
-export async function saveDraftAction(input: { token?: string; when: unknown; contact: unknown }): Promise<{ ok: true; token: string } | { ok: false }> {
+export async function saveDraftAction(input: { token?: string; when: unknown; contact: unknown }): Promise<{ ok: true; token: string; zipKnown: boolean } | { ok: false }> {
   const when = await parseWhen(input.when);
   const contact = contactSchema.safeParse(input.contact);
   if (!when.success || !contact.success) return { ok: false };
   const ip = await clientIp();
   if (!(await consumeRateLimit(db(), { key: `booking:draft:${ip}`, max: 30, windowMs: HOUR })).allowed) return { ok: false };
-  const draft = await saveDraft(db(), { token: typeof input.token === "string" ? input.token : undefined, when: when.data, contact: contact.data });
-  return { ok: true, token: draft.token };
+  const [draft, zipPoint] = await Promise.all([
+    saveDraft(db(), { token: typeof input.token === "string" ? input.token : undefined, when: when.data, contact: contact.data }),
+    lookupZip(contact.data.zip),
+  ]);
+  // Lets the form flag a likely ZIP typo. Says nothing about pricing or eligibility.
+  return { ok: true, token: draft.token, zipKnown: zipPoint !== null };
 }
 
 export async function submitBookingAction(input: {

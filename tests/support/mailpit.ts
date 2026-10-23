@@ -36,3 +36,22 @@ export async function countMessagesTo(to: string): Promise<number> {
   const { messages } = (await (await fetch(`${MAILPIT_API}/messages`)).json()) as { messages: MessageSummary[] };
   return messages.filter((message) => message.To.some((recipient) => recipient.Address === to)).length;
 }
+
+/** Sender address of the newest email to `to` whose subject contains `subjectIncludes`. */
+export async function senderOf(to: string, subjectIncludes: string): Promise<string | null> {
+  const { messages } = (await (await fetch(`${MAILPIT_API}/messages`)).json()) as {
+    messages: (MessageSummary & { From: { Address: string } })[];
+  };
+  const match = messages.find((message) => message.Subject.includes(subjectIncludes) && message.To.some((recipient) => recipient.Address === to));
+  return match?.From.Address ?? null;
+}
+
+/** Waits until an email to `to` with a matching subject arrives (no link required). */
+export async function waitForMessage(to: string, subjectIncludes: string, timeoutMs = 10_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await senderOf(to, subjectIncludes)) return;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(`No "${subjectIncludes}" email to ${to} within ${timeoutMs}ms`);
+}

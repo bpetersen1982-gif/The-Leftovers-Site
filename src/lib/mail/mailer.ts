@@ -8,6 +8,10 @@ export interface OutgoingEmail {
   readonly subject: string;
   readonly text: string;
   readonly html: string;
+  /** Overrides MAIL_FROM (e.g. the booking sender). Must be on a Resend-verified domain. */
+  readonly from?: string;
+  /** Overrides MAIL_REPLY_TO. */
+  readonly replyTo?: string;
 }
 
 export interface Mailer {
@@ -26,8 +30,8 @@ function createResendMailer(config: Extract<ServerEnv, { MAIL_TRANSPORT: "resend
   return {
     async send(message) {
       const { error } = await client.emails.send({
-        from: config.MAIL_FROM,
-        replyTo: config.MAIL_REPLY_TO,
+        from: message.from ?? config.MAIL_FROM,
+        replyTo: message.replyTo ?? config.MAIL_REPLY_TO,
         to: message.to,
         subject: message.subject,
         text: message.text,
@@ -52,8 +56,8 @@ function createSmtpMailer(config: Extract<ServerEnv, { MAIL_TRANSPORT: "smtp" }>
   return {
     async send(message) {
       await transport.sendMail({
-        from: config.MAIL_FROM,
-        replyTo: config.MAIL_REPLY_TO,
+        from: message.from ?? config.MAIL_FROM,
+        replyTo: message.replyTo ?? config.MAIL_REPLY_TO,
         to: message.to,
         subject: message.subject,
         text: message.text,
@@ -93,4 +97,20 @@ export async function sendEmail(message: OutgoingEmail, context: { kind: string 
       ? error
       : new MailDeliveryError("Email delivery failed", { cause: error });
   }
+}
+
+/**
+ * Sender for booking conversations: "The Leftovers Booking <booking@{MAIL_FROM domain}>".
+ * Uses the same Resend-verified domain as MAIL_FROM; replies go to MAIL_REPLY_TO (booking@).
+ */
+export function bookingSender(): { from: string; replyTo: string } {
+  const config = env();
+  return { from: bookingFromAddress(config.MAIL_FROM), replyTo: config.MAIL_REPLY_TO };
+}
+
+/** Pure part of bookingSender, exported for tests. */
+export function bookingFromAddress(mailFrom: string): string {
+  const domain = /@([^>\s]+)>?\s*$/.exec(mailFrom)?.[1];
+  if (!domain) throw new Error("MAIL_FROM must contain an email address");
+  return `The Leftovers Booking <booking@${domain}>`;
 }

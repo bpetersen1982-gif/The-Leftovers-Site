@@ -64,6 +64,8 @@ export function BookingWizard(props: {
   const [contact, setContact] = useState({ contactName: "", email: "", phone: "", organization: "", street: "", city: "", state: "NE", zip: "" });
   const [details, setDetails] = useState({ attendance: "", setting: "UNSURE", soundProvided: "UNSURE", message: "" });
   const [website, setWebsite] = useState("");
+  // Warn once about a ZIP we don't recognize, then let them continue.
+  const [zipWarnedFor, setZipWarnedFor] = useState<string | null>(null);
 
   const whenParser = whenSchema(props.today, { minSets: props.minSets, maxSets: props.maxSets });
   const whenPayload = () => ({ ...when, eventDate: when.flexible ? undefined : when.eventDate });
@@ -98,6 +100,11 @@ export function BookingWizard(props: {
         // Save contact details now, so the band can follow up if the form isn't finished.
         const saved = await saveDraftAction({ token: draftToken.current, when: whenPayload(), contact });
         if (saved.ok) draftToken.current = saved.token;
+        if (saved.ok && !saved.zipKnown && zipWarnedFor !== contact.zip) {
+          setZipWarnedFor(contact.zip);
+          setErrors({ zip: "We don't recognize that ZIP code. Please double-check it, or press Next again to continue." });
+          return;
+        }
         goTo("details");
       });
       return;

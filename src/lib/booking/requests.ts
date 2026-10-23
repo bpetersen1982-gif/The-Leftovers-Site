@@ -5,6 +5,7 @@ import { type PublicDayState, publicDayState } from "../availability/service";
 import { type IsoDate, fromUtc, toDbDate, todayInBandTimeZone } from "../dates";
 import { generateToken, hashToken, isWellFormedToken } from "../tokens";
 import { type IneligibleReason, evaluateEligibility } from "./eligibility";
+import { liveClaimWhere, purgeExpiredClaim } from "./claims";
 import { getPricing } from "./pricing";
 import type { ContactInput, DateContactInput, DetailsInput, WhenInput } from "./validation";
 import { milesBetweenZips } from "./zip-distance";
@@ -61,7 +62,7 @@ async function hasCompetingActivity(
   excludeRequestId?: string,
 ): Promise<boolean> {
   const [claim, others] = await Promise.all([
-    tx.dateClaim.findUnique({ where: { date: toDbDate(date) }, select: { requestId: true } }),
+    tx.dateClaim.findFirst({ where: { date: toDbDate(date), ...liveClaimWhere(new Date()) }, select: { requestId: true } }),
     tx.bookingRequest.count({
       where: { eventDate: toDbDate(date), status: { in: [...OPEN_STATUSES] }, ...(excludeRequestId ? { id: { not: excludeRequestId } } : {}) },
     }),
@@ -143,7 +144,7 @@ export async function submitWizard(
 
   let dayState: PublicDayState | null = null;
   if (date) {
-    dayState = await publicDayState(prisma, date, today);
+    dayState = await publicDayState(prisma, date, today, now);
     if (dayState === "unavailable" || dayState === "past") {
       throw new BookingError("DATE_UNAVAILABLE", "That date isn't available. Pick another date, or choose “flexible”.");
     }
@@ -361,7 +362,8 @@ export async function acceptQuote(
 
   try {
     await prisma.$transaction(async (tx) => {
-      const state = await publicDayState(tx, date, todayInBandTimeZone(now));
+      await purgeExpiredClaim(tx, date, now);
+      const state = await publicDayState(tx, date, todayInBandTimeZone(now), now);
       if (state !== "available" && state !== "limited") throw new DateTakenSignal();
       const updated = await tx.bookingRequest.updateMany({
         where: { id: request.id, status: "QUOTED", version: request.version },
@@ -428,4 +430,15 @@ async function loadQuotedRequest(prisma: PrismaClient, token: string, now: Date)
   if (!quote) throw new BookingError("NOT_QUOTED", "This request doesn't have a quote to accept.");
   if (quote.expiresAt <= now) throw new BookingError("EXPIRED", "This quote has expired. Contact the band and we'll send a fresh one.");
   return request;
+}
+
+/**
+ * Issues a new private-link token for a request (only the hash is stored, so the old
+ * link can't be re-sent). The previous link stops working. Used when the band sends a
+ * new quote or a confirmation that needs a link.
+ */
+export async function rotateAccessToken(prisma: PrismaClient, requestId: string): Promise<string> {
+  const token = generateToken();
+  await prisma.bookingRequest.update({ where: { id: requestId }, data: { accessTokenHash: hashToken(token) } });
+  return token;
 }

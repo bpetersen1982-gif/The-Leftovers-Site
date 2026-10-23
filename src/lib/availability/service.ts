@@ -13,6 +13,7 @@ import {
   toDbDate,
   todayInBandTimeZone,
 } from "../dates";
+import { liveClaimWhere } from "../booking/claims";
 import { can } from "../permissions";
 
 /**
@@ -206,6 +207,7 @@ export async function publicDayStates(
   prisma: Pick<PrismaClient, "availabilityBlock" | "dateClaim">,
   range: { from: IsoDate; to: IsoDate },
   today: IsoDate = todayInBandTimeZone(),
+  now: Date = new Date(),
 ): Promise<Map<IsoDate, PublicDayState>> {
   const [blocks, claims] = await Promise.all([
     prisma.availabilityBlock.findMany({
@@ -213,7 +215,7 @@ export async function publicDayStates(
       select: { scope: true, startDate: true, endDate: true },
     }),
     prisma.dateClaim.findMany({
-      where: { date: { gte: toDbDate(range.from), lte: toDbDate(range.to) } },
+      where: { date: { gte: toDbDate(range.from), lte: toDbDate(range.to) }, ...liveClaimWhere(now) },
       select: { date: true, kind: true },
     }),
   ]);
@@ -237,6 +239,7 @@ export async function publicDayState(
   prisma: Pick<PrismaClient, "availabilityBlock" | "dateClaim">,
   date: IsoDate,
   today: IsoDate = todayInBandTimeZone(),
+  now: Date = new Date(),
 ): Promise<PublicDayState> {
-  return (await publicDayStates(prisma, { from: date, to: date }, today)).get(date) ?? "unavailable";
+  return (await publicDayStates(prisma, { from: date, to: date }, today, now)).get(date) ?? "unavailable";
 }

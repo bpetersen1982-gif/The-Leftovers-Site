@@ -6,10 +6,15 @@ import { requirePermission } from "@/lib/auth/session";
 import { formatCents } from "@/lib/booking/eligibility";
 import { formatTime } from "@/lib/booking/format";
 import { getInboxDetail } from "@/lib/booking/inbox";
-import { formatLongDate } from "@/lib/dates";
+import { DECLINE_TEMPLATE } from "@/lib/booking/prospect-emails";
+import { formatLongDate, todayInBandTimeZone } from "@/lib/dates";
 import { db } from "@/lib/db";
+import { can } from "@/lib/permissions";
+import { CancelPanel, ConfirmPanel, DeclinePanel, HoldPanel, NotePanel, QuotePanel, ReplyPanel } from "./panels";
 
 export const metadata: Metadata = { title: "Booking request" };
+
+const EVENT_LABELS: Record<string, string> = { NOTE: "Note", CONTACTED: "Contacted them", EMAIL: "Emailed them" };
 
 const STAMP = new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Chicago" });
 const LABELS = {
@@ -17,12 +22,35 @@ const LABELS = {
   sound: { YES: "Provided", NO: "Band brings sound", PARTIAL: "Partly provided", UNSURE: "Not sure" },
 } as const;
 
-export default async function BookingDetailPage({ params }: { params: Promise<{ id: string }> }) {
+const NOTICES: Record<string, string> = {
+  declined: "Declined. The date is free again.",
+  "declined-email-failed": "Declined, but the email couldn't be sent. Try the Reply box, or call them.",
+  cancelled: "Booking cancelled and the date freed. Let them know with the Reply box.",
+};
+
+export default async function BookingDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ notice?: string }>;
+}) {
+  const { notice } = await searchParams;
+  const noticeText = notice ? NOTICES[notice] : undefined;
   const viewer = await requirePermission("booking:view");
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
   const request = await getInboxDetail(db(), viewer, id);
   if (!request) notFound();
+
+  const today = todayInBandTimeZone();
+  const isAdmin = can(viewer.role, "booking:manage");
+  const canReply = can(viewer.role, "booking:reply") && request.status !== "IN_PROGRESS";
+  const ids = { requestId: request.id, version: request.version };
+  const confirmable = ["ACCEPTED", "AWAITING_CONTACT", "CONTACTED", "QUOTED", "CONFIRMED"].includes(request.status);
+  const quotable = ["AWAITING_CONTACT", "CONTACTED", "QUOTED", "DECLINED_BY_PROSPECT"].includes(request.status);
+  const holdable = ["AWAITING_CONTACT", "CONTACTED", "QUOTED"].includes(request.status) && request.eventDate !== null;
+  const declinable = ["AWAITING_CONTACT", "CONTACTED", "QUOTED", "ACCEPTED"].includes(request.status);
 
   const rows: [string, string][] = [
     ["Date", request.eventDate ? formatLongDate(request.eventDate) : "Flexible"],
@@ -49,6 +77,11 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
           {request.claim && <span className="ml-2 text-base">({request.claim.kind === "BOOKED" ? "date booked" : "date pending"})</span>}
         </p>
       </div>
+      {noticeText && (
+        <p role="status" className="border-l-4 border-olive bg-olive/15 px-3 py-2 font-semibold">
+          {noticeText}
+        </p>
+      )}
       {request.isConflict && (
         <p role="note" className="border-l-4 border-red-ui bg-red-ui/15 px-3 py-2 font-semibold">
           Conflict: another request, hold, or booking exists for this date.
@@ -126,13 +159,38 @@ export default async function BookingDetailPage({ params }: { params: Promise<{ 
           {request.timeline.map((event) => (
             <li key={event.id} className="text-sm">
               <span className="text-cream/90">{STAMP.format(event.createdAt)} · {event.authorName}: </span>
-              {event.toStatus ? `${event.fromStatus ? `${event.fromStatus} → ` : ""}${event.toStatus}` : event.kind}
-              {event.body && <span className="block pl-4">&ldquo;{event.body}&rdquo;</span>}
+              {event.toStatus ? `${event.fromStatus ? `${event.fromStatus} → ` : ""}${event.toStatus}` : (EVENT_LABELS[event.kind] ?? event.kind)}
+              {event.body && <span className="block pl-4 whitespace-pre-line">&ldquo;{event.body}&rdquo;</span>}
             </li>
           ))}
         </ol>
       </section>
-      <p className="text-sm text-cream/90">Confirming, declining, notes, and manual quotes are coming in the next update.</p>
+      <div className="space-y-6">
+        {isAdmin && confirmable && (
+          <ConfirmPanel
+            ids={ids}
+            isEdit={request.status === "CONFIRMED"}
+            today={today}
+            defaults={{
+              eventDate: request.eventDate ?? today,
+              startTime: request.startTime,
+              endTime: request.endTime,
+              loadInTime: request.loadInTime,
+              sets: request.sets,
+              agreedPrice: request.agreedPriceCents ?? request.quote?.totalCents ?? null,
+            }}
+          />
+        )}
+        {isAdmin && quotable && <QuotePanel ids={ids} today={today} defaults={{ eventDate: request.eventDate ?? today, sets: request.sets }} />}
+        {isAdmin && holdable && <HoldPanel ids={ids} heldUntil={request.claim?.kind === "PENDING" ? request.claim.expiresAt : null} />}
+        {canReply && <ReplyPanel requestId={request.id} reference={request.reference} />}
+        <NotePanel requestId={request.id} />
+        {isAdmin && declinable && (
+          <DeclinePanel ids={ids} template={DECLINE_TEMPLATE(request.eventDate ? formatLongDate(request.eventDate) : "your event")} />
+        )}
+        {isAdmin && request.status === "CONFIRMED" && <CancelPanel ids={ids} />}
+        {!isAdmin && <p className="text-sm text-cream/90">Only Admins can quote, confirm, or decline. Add a note or log your call so they know.</p>}
+      </div>
     </div>
   );
 }

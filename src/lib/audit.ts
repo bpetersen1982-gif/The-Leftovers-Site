@@ -22,11 +22,18 @@ export const AUDIT_ACTION_LABELS = {
   "pricing.clearRates": "Cleared all rates",
   "specialDate.add": "Added special date",
   "specialDate.remove": "Removed special date",
+  "booking.confirm": "Confirmed booking",
+  "booking.decline": "Declined booking request",
+  "booking.cancel": "Cancelled booking",
+  "booking.quote": "Sent quote",
+  "booking.hold": "Held date",
+  "booking.releaseHold": "Released hold",
+  "booking.override": "Overrode a date (bumped another request)",
 } as const;
 
 export type AuditAction = keyof typeof AUDIT_ACTION_LABELS;
 
-export type AuditTargetType = "user" | "invite" | "page" | "bandMember" | "siteSettings" | "availabilityBlock" | "pricing" | "specialDate";
+export type AuditTargetType = "user" | "invite" | "page" | "bandMember" | "siteSettings" | "availabilityBlock" | "pricing" | "specialDate" | "bookingRequest";
 
 export interface AuditActor {
   readonly id: string;
