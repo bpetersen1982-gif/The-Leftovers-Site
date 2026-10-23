@@ -1,0 +1,13 @@
+{
+  "identities": [
+    {
+      "name": "leftovers-dev",
+      "credentials": [{ "accessKey": "leftovers_dev_key", "secretKey": "leftovers_dev_secret_only" }],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    },
+    {
+      "name": "anonymous",
+      "actions": ["Read:leftovers-media-public", "Read:leftovers-test-public"]
+    }
+  ]
+}

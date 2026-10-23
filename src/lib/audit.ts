@@ -29,11 +29,15 @@ export const AUDIT_ACTION_LABELS = {
   "booking.hold": "Held date",
   "booking.releaseHold": "Released hold",
   "booking.override": "Overrode a date (bumped another request)",
+  "photo.publish": "Published photo",
+  "photo.approve": "Approved photo",
+  "photo.reject": "Rejected photo",
+  "photo.delete": "Deleted unpublished photo",
 } as const;
 
 export type AuditAction = keyof typeof AUDIT_ACTION_LABELS;
 
-export type AuditTargetType = "user" | "invite" | "page" | "bandMember" | "siteSettings" | "availabilityBlock" | "pricing" | "specialDate" | "bookingRequest";
+export type AuditTargetType = "user" | "invite" | "page" | "bandMember" | "siteSettings" | "availabilityBlock" | "pricing" | "specialDate" | "bookingRequest" | "photo";
 
 export interface AuditActor {
   readonly id: string;

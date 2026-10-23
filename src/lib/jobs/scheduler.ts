@@ -1,6 +1,8 @@
 import { db } from "../db";
 import { logger } from "../logger";
+import { objectStorage } from "../storage";
 import { runBookingJobs } from "./booking-jobs";
+import { runPhotoJobs } from "./photo-jobs";
 
 /**
  * In-process scheduler. One small job every 10 minutes doesn't justify a separate worker
@@ -18,6 +20,11 @@ async function tick(): Promise<void> {
     await runBookingJobs(db());
   } catch (error) {
     logger.error({ err: error }, "booking jobs failed");
+  }
+  try {
+    await runPhotoJobs(db(), objectStorage());
+  } catch (error) {
+    logger.error({ err: error }, "photo jobs failed");
   }
 }
 

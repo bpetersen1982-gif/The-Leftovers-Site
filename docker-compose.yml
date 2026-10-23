@@ -35,5 +35,24 @@ services:
       timeout: 3s
       retries: 30
 
+  # S3-compatible stand-in for Cloudflare R2 (dev + tests). S3 API: http://127.0.0.1:9100
+  # Local-only credentials live in docker/seaweedfs/s3.json. Buckets are created by
+  # `pnpm storage:init` (and automatically by the test setups).
+  storage:
+    image: chrislusf/seaweedfs:4.48
+    command: >-
+      server -dir=/data -ip=127.0.0.1 -ip.bind=0.0.0.0 -master.volumeSizeLimitMB=64 -volume.max=200
+      -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -s3.allowedOrigins=*
+    ports:
+      - "127.0.0.1:9100:8333"
+    volumes:
+      - storage_data:/data
+      - ./docker/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8333/healthz || exit 1"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
 volumes:
   postgres_data:
+  storage_data:

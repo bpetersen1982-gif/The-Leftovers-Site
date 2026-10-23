@@ -17,6 +17,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     { href: "/admin", label: "Home" },
     { href: "/admin/bookings", label: "Bookings" },
     { href: "/admin/availability", label: "Availability" },
+    { href: "/admin/photos", label: "Photos" },
     ...(can(user.role, "pricing:manage") ? [{ href: "/admin/pricing", label: "Pricing" }] : []),
     ...(can(user.role, "content:edit") ? [{ href: "/admin/pages", label: "Pages" }] : []),
     ...(can(user.role, "members:edit") ? [{ href: "/admin/members", label: "Members" }] : []),

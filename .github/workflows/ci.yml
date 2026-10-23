@@ -42,6 +42,20 @@ jobs:
         with:
           node-version-file: .node-version
           cache: pnpm
+      # S3-compatible stand-in for R2 (same image and flags as docker-compose.yml).
+      - name: Start local object storage
+        run: |
+          docker run -d --name storage -p 127.0.0.1:9100:8333 \
+            -v "$PWD/docker/seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro" \
+            chrislusf/seaweedfs:4.48 server -dir=/data -ip=127.0.0.1 -ip.bind=0.0.0.0 \
+            -master.volumeSizeLimitMB=64 -volume.max=200 \
+            -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -s3.allowedOrigins='*'
+          for attempt in $(seq 1 60); do
+            curl -fsS http://127.0.0.1:9100/healthz >/dev/null && exit 0
+            sleep 2
+          done
+          docker logs storage
+          exit 1
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec prisma generate
       - run: pnpm lint

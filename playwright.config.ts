@@ -1,5 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 import webpush from "web-push";
+import { TEST_STORAGE_ENV } from "./tests/support/storage";
 
 /**
  * End-to-end tests against a production build (`next start`), the `leftovers_test`
@@ -44,6 +45,8 @@ export default defineConfig({
       VAPID_PUBLIC_KEY: VAPID.publicKey,
       VAPID_PRIVATE_KEY: VAPID.privateKey,
       VAPID_SUBJECT: "mailto:booking@example.test",
+      // Local S3 server with the test buckets (never R2).
+      ...TEST_STORAGE_ENV,
     },
   },
 });

@@ -27,6 +27,12 @@ export const PERMISSIONS = {
   "booking:addNote": ["ADMIN", "MEMBER"],
   "booking:manage": ["ADMIN"],
   "booking:reply": ["ADMIN", "MEMBER"],
+  /** Admin uploads publish on submit; Member uploads go to review (APR-2). */
+  "photos:upload": ["ADMIN", "MEMBER"],
+  "photos:publishDirectly": ["ADMIN"],
+  "photos:review": ["ADMIN"],
+  /** Edit details / delete any not-yet-public photo (Members: their own only, APR-6). */
+  "photos:manageAll": ["ADMIN"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

@@ -41,6 +41,8 @@ model User {
   availabilityBlocks       AvailabilityBlock[] @relation("AvailabilityOwner")
   availabilityBlocksAdded  AvailabilityBlock[] @relation("AvailabilityCreator")
   pushSubscriptions        PushSubscription[]
+  photosUploaded           Photo[]             @relation("PhotoUploader")
+  photosDecided            Photo[]             @relation("PhotoDecider")
   /// NOT-5: booking alerts by email / phone push. Both on by default.
   bookingEmailAlerts       Boolean             @default(true)
   bookingPushAlerts        Boolean             @default(true)
@@ -493,4 +495,76 @@ model PushSubscription {
 
   @@index([userId])
   @@map("push_subscription")
+}
+
+// ---------------------------------------------------------------- photos
+
+/// Lifecycle of a photo (requirements APR-1, APR-2, APR-6, MED-1..4). Only APPROVED is public.
+enum PhotoStatus {
+  /// Upload URL issued; waiting for the browser to finish sending the file.
+  UPLOADING
+  /// File received; signature check, HEIC conversion, metadata strip, and resizing in progress.
+  PROCESSING
+  /// Processed and private; the uploader adds alt text etc. before submitting.
+  DRAFT
+  /// Submitted by a Band Member; waiting on an Admin.
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  /// The file couldn't be used (wrong type, corrupt, too large). Original already deleted.
+  FAILED
+}
+
+model Photo {
+  id               String      @id @default(uuid()) @db.Uuid
+  status           PhotoStatus @default(UPLOADING)
+  uploaderId       String
+  uploader         User        @relation("PhotoUploader", fields: [uploaderId], references: [id])
+  /// Display only (sanitized), so uploaders can tell their files apart. Never used as a storage key.
+  originalFilename String
+  /// What the browser said it was sending; checked against the file's signature on completion.
+  declaredType     String
+  declaredSize     Int
+  /// Private bucket key of the uploaded original. Deleted after processing.
+  originalKey      String      @unique
+  /// Upload URL expiry; abandoned uploads are cleaned up after this.
+  uploadExpiresAt  DateTime    @db.Timestamptz(3)
+  width            Int?
+  height           Int?
+  /// Processed files in the private bucket: [{ kind, width, height, key, contentType, bytes }].
+  variants         Json        @default("[]")
+  /// Tiny base64 WebP shown while the real image loads.
+  blurDataUrl      String?
+  /// Public bucket key prefix while APPROVED (random per publish, so old URLs never come back).
+  publicPrefix     String?     @unique
+  altText          String      @default("")
+  caption          String      @default("")
+  credit           String      @default("")
+  failureReason    String?
+  submittedAt      DateTime?   @db.Timestamptz(3)
+  decidedAt        DateTime?   @db.Timestamptz(3)
+  decidedById      String?
+  decidedBy        User?       @relation("PhotoDecider", fields: [decidedById], references: [id])
+  decidedByRole    Role?
+  rejectionReason  String?
+  publishedAt      DateTime?   @db.Timestamptz(3)
+  /// Optimistic concurrency (APR-11): every state change bumps it.
+  version          Int         @default(1)
+  createdAt        DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime    @updatedAt @db.Timestamptz(3)
+
+  @@index([status, publishedAt(sort: Desc)])
+  @@index([status, uploadExpiresAt])
+  @@index([uploaderId, status])
+  @@map("photo")
+}
+
+// ---------------------------------------------------------------- jobs
+
+/// Last successful run of a once-a-day job (e.g. the review digest), so restarts don't resend it.
+model JobState {
+  name      String   @id
+  lastRunAt DateTime @db.Timestamptz(3)
+
+  @@map("job_state")
 }
