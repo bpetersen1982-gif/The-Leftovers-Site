@@ -18,7 +18,8 @@ export const metadata: Metadata = {
     template: "%s | The Leftovers",
   },
   description: DESCRIPTION,
-  icons: { icon: "/brand/icon-star.png" },
+  icons: { icon: "/brand/app-icon-192.png", apple: "/brand/app-icon-180.png" },
+  appleWebApp: { capable: true, title: "Leftovers", statusBarStyle: "black-translucent" },
   openGraph: { type: "website", siteName: "The Leftovers", url: SITE_URL, description: DESCRIPTION },
 };
 

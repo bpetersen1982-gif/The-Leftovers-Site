@@ -5,6 +5,7 @@ import { formatCents } from "@/lib/booking/eligibility";
 import { INBOX_FILTERS, type InboxFilter, isInboxFilter, listInbox } from "@/lib/booking/inbox";
 import { formatLongDate } from "@/lib/dates";
 import { db } from "@/lib/db";
+import { can } from "@/lib/permissions";
 
 export const metadata: Metadata = { title: "Bookings" };
 
@@ -18,7 +19,14 @@ export default async function BookingsInboxPage({ searchParams }: { searchParams
 
   return (
     <div className="space-y-6">
-      <h1 className="font-heading text-3xl font-bold tracking-wider uppercase">Bookings</h1>
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <h1 className="font-heading text-3xl font-bold tracking-wider uppercase">Bookings</h1>
+        {can(viewer.role, "booking:manage") && (
+          <Link href="/admin/bookings/funnel" className="underline">
+            Funnel: declined, expired, unfinished
+          </Link>
+        )}
+      </div>
       <nav aria-label="Booking filters">
         <ul className="flex flex-wrap gap-2 font-heading tracking-wider uppercase">
           {(Object.keys(INBOX_FILTERS) as InboxFilter[]).map((key) => (

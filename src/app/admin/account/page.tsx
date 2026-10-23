@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { requirePermission } from "@/lib/auth/session";
+import { db } from "@/lib/db";
+import { vapidPublicKey } from "@/lib/push";
+import { AlertsPanel } from "./alerts-panel";
 import { PasskeyManager } from "./passkey-manager";
 
 export const metadata: Metadata = { title: "My account" };
@@ -7,14 +10,22 @@ export const metadata: Metadata = { title: "My account" };
 export default async function AccountPage({ searchParams }: { searchParams: Promise<{ welcome?: string }> }) {
   const user = await requirePermission("account:managePasskeys");
   const { welcome } = await searchParams;
+  const [account, devices] = await Promise.all([
+    db().user.findUniqueOrThrow({ where: { id: user.id }, select: { bookingEmailAlerts: true, bookingPushAlerts: true } }),
+    db().pushSubscription.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, label: true, createdAt: true, lastSuccessAt: true },
+    }),
+  ]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       <h1 className="font-heading text-3xl font-bold tracking-wider uppercase">My account</h1>
       {welcome === "1" && (
         <p role="status" className="panel-paper px-5 py-4">
           You&apos;re in, {user.name}. Add a passkey below so next time you can log in with Face ID or a fingerprint instead
-          of waiting for an email.
+          of waiting for an email, and turn on booking alerts for your phone.
         </p>
       )}
       <dl className="grid gap-1">
@@ -22,6 +33,16 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
         <dd>{user.email}</dd>
       </dl>
       <PasskeyManager />
+      <AlertsPanel
+        vapidKey={vapidPublicKey()}
+        preferences={{ email: account.bookingEmailAlerts, push: account.bookingPushAlerts }}
+        devices={devices.map((device) => ({
+          id: device.id,
+          label: device.label,
+          createdAt: device.createdAt.toISOString(),
+          lastSuccessAt: device.lastSuccessAt?.toISOString() ?? null,
+        }))}
+      />
     </div>
   );
 }

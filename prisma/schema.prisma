@@ -40,6 +40,10 @@ model User {
   bandMember    BandMember?
   availabilityBlocks       AvailabilityBlock[] @relation("AvailabilityOwner")
   availabilityBlocksAdded  AvailabilityBlock[] @relation("AvailabilityCreator")
+  pushSubscriptions        PushSubscription[]
+  /// NOT-5: booking alerts by email / phone push. Both on by default.
+  bookingEmailAlerts       Boolean             @default(true)
+  bookingPushAlerts        Boolean             @default(true)
 
   @@index([role, deactivatedAt])
   @@map("user")
@@ -384,6 +388,9 @@ model BookingRequest {
   loadInTime       String?
   confirmedAt      DateTime?          @db.Timestamptz(3)
   confirmedById    String?
+  /// BOOK-17 reminders for accepted quotes awaiting confirmation.
+  reminder24SentAt DateTime?          @db.Timestamptz(3)
+  reminder72SentAt DateTime?          @db.Timestamptz(3)
   version          Int                @default(1)
   createdAt        DateTime           @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime           @updatedAt @db.Timestamptz(3)
@@ -436,6 +443,8 @@ model DateClaim {
   expiresAt DateTime?      @db.Timestamptz(3)
   /// Null = created by the prospect accepting a quote.
   createdById String?
+  /// Set when Admins were warned that a hold expires soon.
+  expiryWarnedAt DateTime? @db.Timestamptz(3)
   createdAt DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt DateTime       @updatedAt @db.Timestamptz(3)
 
@@ -465,4 +474,23 @@ model BookingEvent {
 
   @@index([requestId, createdAt])
   @@map("booking_event")
+}
+
+// ---------------------------------------------------------------- notifications
+
+/// A browser/device that accepted Web Push for a band user (requirements NOT-1).
+model PushSubscription {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint      String    @unique
+  p256dh        String
+  auth          String
+  /// Friendly name so people can tell devices apart ("iPhone", "Mac").
+  label         String    @default("This device")
+  lastSuccessAt DateTime? @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@index([userId])
+  @@map("push_subscription")
 }

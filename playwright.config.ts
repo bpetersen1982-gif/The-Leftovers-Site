@@ -1,10 +1,13 @@
 import { defineConfig, devices } from "@playwright/test";
+import webpush from "web-push";
 
 /**
  * End-to-end tests against a production build (`next start`), the `leftovers_test`
  * database, and the local Mailpit inbox. Run `pnpm build` first.
  */
 const PORT = 3001;
+// Throwaway VAPID keys per test run, so the phone-alerts UI renders its real (configured) path.
+const VAPID = webpush.generateVAPIDKeys();
 const BASE_URL = `http://localhost:${PORT}`;
 const TEST_DATABASE_URL =
   process.env.LEFTOVERS_TEST_DATABASE_URL ?? "postgresql://leftovers:leftovers_dev_only@127.0.0.1:5433/leftovers_test";
@@ -38,6 +41,9 @@ export default defineConfig({
       MAIL_FROM: "The Leftovers <no-reply@mail.example.test>",
       MAIL_REPLY_TO: "booking@example.test",
       LOG_LEVEL: "warn",
+      VAPID_PUBLIC_KEY: VAPID.publicKey,
+      VAPID_PRIVATE_KEY: VAPID.privateKey,
+      VAPID_SUBJECT: "mailto:booking@example.test",
     },
   },
 });

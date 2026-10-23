@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { bandEmail, formatTime } from "@/lib/booking/notifications";
+import { bandEmail, bandPushPayload, formatTime } from "@/lib/booking/notifications";
+import { subscriptionSchema, vapidConfig } from "@/lib/push";
 import { CONFIRM_TEMPLATE, DECLINE_TEMPLATE } from "@/lib/booking/prospect-emails";
 import { bookingFromAddress } from "@/lib/mail/mailer";
 import { performanceMinutes, phoneSchema, setsMismatch, suggestedSets, timeSchema, whenSchema } from "@/lib/booking/validation";
@@ -99,5 +100,34 @@ describe("prospect emails", () => {
     const confirm = CONFIRM_TEMPLATE({ date: "Sat", time: "8:00 PM–12:00 AM", loadIn: null, sets: 4, price: "$1,500" });
     expect(confirm).toContain("Agreed price: $1,500");
     expect(confirm).not.toContain("Load-in");
+  });
+});
+
+describe("phone push alerts", () => {
+  it("never puts names, phones, emails, or prices on the lock screen", () => {
+    const payload = bandPushPayload("QUOTE_ACCEPTED", summary);
+    const text = JSON.stringify(payload);
+    expect(payload).toEqual({
+      title: "CONFLICT · Quote accepted: confirm this gig",
+      body: "Sat, Nov 14, 2026 · Bar / club · 4 sets",
+      url: "/admin/bookings/req-1",
+      tag: "booking-req-1",
+    });
+    for (const secret of ["Pat", "402", "pat@example.test", "1,600", "Zoo Bar"]) expect(text).not.toContain(secret);
+  });
+
+  it("push is optional: no VAPID keys means no push config", () => {
+    expect(vapidConfig({})).toBeNull();
+    expect(vapidConfig({ VAPID_PUBLIC_KEY: "p", VAPID_PRIVATE_KEY: "k", VAPID_SUBJECT: "mailto:x@example.test" })).toEqual({
+      publicKey: "p",
+      privateKey: "k",
+      subject: "mailto:x@example.test",
+    });
+  });
+
+  it("only accepts https push endpoints", () => {
+    const base = { endpoint: "https://web.push.apple.com/abc", keys: { p256dh: "a", auth: "b" } };
+    expect(subscriptionSchema.safeParse(base).success).toBe(true);
+    expect(subscriptionSchema.safeParse({ ...base, endpoint: "http://evil.example/x" }).success).toBe(false);
   });
 });

@@ -6,6 +6,7 @@ import { logger } from "../logger";
 import { type OutgoingEmail, sendEmail } from "../mail/mailer";
 import { emailLayout, escapeHtml } from "../mail/templates";
 import { can } from "../permissions";
+import { type PushPayload, sendPushToUsers } from "../push";
 import { EVENT_TYPE_LABELS, formatCents } from "./eligibility";
 import { formatTime } from "./format";
 import type { QuoteView } from "./requests";
@@ -27,7 +28,10 @@ export type BandEvent =
   | "DATE_CONTACT"
   | "BOOKED"
   | "RELEASED_BY_OVERRIDE"
-  | "CANCELLED";
+  | "CANCELLED"
+  | "REMINDER_24H"
+  | "REMINDER_72H"
+  | "HOLD_EXPIRING";
 
 const EVENT_HEADLINES: Record<BandEvent, string> = {
   NEW_REQUEST: "New booking request",
@@ -38,7 +42,26 @@ const EVENT_HEADLINES: Record<BandEvent, string> = {
   BOOKED: "Gig booked",
   RELEASED_BY_OVERRIDE: "Bumped by an override: contact them",
   CANCELLED: "Booking cancelled",
+  REMINDER_24H: "Reminder: accepted quote waiting for confirmation",
+  REMINDER_72H: "Still waiting: accepted quote not confirmed after 3 days",
+  HOLD_EXPIRING: "Hold expires within a day",
 };
+
+/** Reminders and hold warnings go to Admins only (they're the ones who can act). */
+const ADMIN_ONLY_EVENTS: ReadonlySet<BandEvent> = new Set(["REMINDER_24H", "REMINDER_72H", "HOLD_EXPIRING"]);
+
+/** Lock-screen safe: no names, phones, emails, or prices (NOT-3). */
+export function bandPushPayload(event: BandEvent, summary: Pick<BandSummary, "requestId" | "date" | "eventTypeLabel" | "sets" | "isConflict">): PushPayload {
+  const day = summary.date ? SHORT_DATE.format(new Date(`${summary.date}T00:00:00Z`)) : "Flexible date";
+  return {
+    title: `${summary.isConflict ? "CONFLICT · " : ""}${EVENT_HEADLINES[event]}`,
+    body: `${day} · ${summary.eventTypeLabel}${summary.sets ? ` · ${summary.sets} sets` : ""}`,
+    url: `/admin/bookings/${summary.requestId}`,
+    tag: `booking-${summary.requestId}`,
+  };
+}
+
+const SHORT_DATE = new Intl.DateTimeFormat("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
 export { formatTime };
 
@@ -94,7 +117,7 @@ export async function sendProspectConfirmation(input: {
 
 // ---------------------------------------------------------------- band
 
-interface BandSummary {
+export interface BandSummary {
   readonly requestId: string;
   readonly reference: string;
   readonly isConflict: boolean;
@@ -170,26 +193,36 @@ export function bandEmail(event: BandEvent, summary: BandSummary, recipient: { e
       body: lines.slice(1).map(escapeHtml).join("<br>"),
       actionLabel: "Open request",
       actionUrl: url,
-      footer: `Reference ${summary.reference}. You get these because you're on the band site. Phone alerts are coming.`,
+      footer: `Reference ${summary.reference}. Change alert settings under My account on the band site.`,
     }),
   };
 }
 
-/** Emails every active band account about a booking event. Returns how many sent. */
+/**
+ * Notifies every active band account (Admins only for reminders) by email and phone push,
+ * per each person's preferences. Returns how many emails were sent.
+ */
 export async function notifyBand(prisma: PrismaClient, event: BandEvent, requestId: string): Promise<number> {
-  const [summary, users] = await Promise.all([
+  const [summary, allUsers] = await Promise.all([
     loadSummary(prisma, requestId),
-    prisma.user.findMany({ where: { deactivatedAt: null }, select: { email: true, role: true } }),
+    prisma.user.findMany({
+      where: { deactivatedAt: null },
+      select: { id: true, email: true, role: true, bookingEmailAlerts: true, bookingPushAlerts: true },
+    }),
   ]);
   if (!summary) return 0;
+  const users = ADMIN_ONLY_EVENTS.has(event) ? allUsers.filter((user) => can(user.role, "booking:manage")) : allUsers;
   const appUrl = env().APP_URL;
-  const results = await Promise.all(users.map((user) => sendQuietly(bandEmail(event, summary, user, appUrl), `band-${event.toLowerCase()}`)));
+  const emailUsers = users.filter((user) => user.bookingEmailAlerts);
+  const pushUserIds = users.filter((user) => user.bookingPushAlerts).map((user) => user.id);
+
+  const [results, pushed] = await Promise.all([
+    Promise.all(emailUsers.map((user) => sendQuietly(bandEmail(event, summary, user, appUrl), `band-${event.toLowerCase()}`))),
+    sendPushToUsers(prisma, pushUserIds, bandPushPayload(event, summary)),
+  ]);
   const sent = results.filter(Boolean).length;
-  if (sent < users.length) {
-    logger.warn({ event, requestId, sent, total: users.length }, "some band notifications failed");
-  } else {
-    logger.info({ event, requestId, sent }, "band notified");
-  }
+  const level = sent < emailUsers.length ? "warn" : "info";
+  logger[level]({ event, requestId, emailed: sent, emailTotal: emailUsers.length, pushed }, "band notified");
   return sent;
 }
 
