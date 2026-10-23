@@ -1,0 +1,206 @@
+{
+  "pack": "The Leftovers \u2014 Kiro Website Asset Pack",
+  "source": "Generated 1536x1024 asset-board image, cropped into separate raster files",
+  "assets": [
+    {
+      "file": "logos/logo-primary-extracted.png",
+      "width": 315,
+      "height": 166
+    },
+    {
+      "file": "logos/logo-sticker-extracted.png",
+      "width": 282,
+      "height": 165
+    },
+    {
+      "file": "logos/logo-patch-extracted.png",
+      "width": 162,
+      "height": 165
+    },
+    {
+      "file": "logos/logo-distressed-extracted.png",
+      "width": 240,
+      "height": 165
+    },
+    {
+      "file": "logos/logo-monochrome-extracted.png",
+      "width": 241,
+      "height": 165
+    },
+    {
+      "file": "logos/icon-star-extracted.png",
+      "width": 165,
+      "height": 162
+    },
+    {
+      "file": "photos/hero-desktop.jpg",
+      "width": 369,
+      "height": 134
+    },
+    {
+      "file": "photos/hero-mobile.jpg",
+      "width": 199,
+      "height": 134
+    },
+    {
+      "file": "photos/band-guitar.jpg",
+      "width": 140,
+      "height": 134
+    },
+    {
+      "file": "photos/band-drums.jpg",
+      "width": 151,
+      "height": 134
+    },
+    {
+      "file": "photos/band-vocals.jpg",
+      "width": 161,
+      "height": 134
+    },
+    {
+      "file": "photos/band-live-crowd.jpg",
+      "width": 159,
+      "height": 134
+    },
+    {
+      "file": "photos/band-portrait.jpg",
+      "width": 246,
+      "height": 134
+    },
+    {
+      "file": "textures/grunge-dark.jpg",
+      "width": 158,
+      "height": 91
+    },
+    {
+      "file": "textures/concrete-distress.jpg",
+      "width": 154,
+      "height": 91
+    },
+    {
+      "file": "textures/dirty-paper.jpg",
+      "width": 140,
+      "height": 91
+    },
+    {
+      "file": "textures/film-grain.jpg",
+      "width": 139,
+      "height": 91
+    },
+    {
+      "file": "textures/scratches.jpg",
+      "width": 149,
+      "height": 91
+    },
+    {
+      "file": "textures/tape-texture.jpg",
+      "width": 135,
+      "height": 91
+    },
+    {
+      "file": "textures/poster-wall-red.jpg",
+      "width": 160,
+      "height": 91
+    },
+    {
+      "file": "textures/weathered-wood.jpg",
+      "width": 260,
+      "height": 91
+    },
+    {
+      "file": "textures/vinyl-texture.jpg",
+      "width": 146,
+      "height": 91
+    },
+    {
+      "file": "elements/star-red.png",
+      "width": 68,
+      "height": 58
+    },
+    {
+      "file": "elements/star-cream.png",
+      "width": 64,
+      "height": 58
+    },
+    {
+      "file": "elements/brushstroke-red.png",
+      "width": 138,
+      "height": 58
+    },
+    {
+      "file": "elements/brushstroke-cream.png",
+      "width": 141,
+      "height": 58
+    },
+    {
+      "file": "elements/torn-paper-left.png",
+      "width": 162,
+      "height": 58
+    },
+    {
+      "file": "elements/torn-paper-right.png",
+      "width": 146,
+      "height": 58
+    },
+    {
+      "file": "elements/tape-strip-dark.png",
+      "width": 90,
+      "height": 58
+    },
+    {
+      "file": "elements/tape-strip-light.png",
+      "width": 113,
+      "height": 58
+    },
+    {
+      "file": "elements/arrow-scribble.png",
+      "width": 97,
+      "height": 58
+    },
+    {
+      "file": "elements/arrow-right.png",
+      "width": 107,
+      "height": 58
+    },
+    {
+      "file": "elements/circle-scribble.png",
+      "width": 122,
+      "height": 58
+    },
+    {
+      "file": "elements/x-scribble.png",
+      "width": 105,
+      "height": 58
+    },
+    {
+      "file": "ui/button-listen-now.png",
+      "width": 161,
+      "height": 44
+    },
+    {
+      "file": "ui/button-contact-band.png",
+      "width": 178,
+      "height": 44
+    },
+    {
+      "file": "ui/button-view-shows.png",
+      "width": 169,
+      "height": 44
+    },
+    {
+      "file": "ui/navigation-texture.png",
+      "width": 300,
+      "height": 44
+    },
+    {
+      "file": "ui/divider-line.png",
+      "width": 205,
+      "height": 44
+    },
+    {
+      "file": "ui/divider-torn-paper.png",
+      "width": 159,
+      "height": 44
+    }
+  ]
+}

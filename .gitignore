@@ -44,3 +44,9 @@ Thumbs.db
 # Raw downloads (regenerate per data/zcta/README.md)
 data/**/source/
 *.zip
+
+# macOS
+**/.DS_Store
+
+# Generated Prisma client (rebuilt by `prisma generate`)
+src/generated/

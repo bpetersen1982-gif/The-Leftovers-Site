@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens (requirements CNT-8; values and contrast notes in design/README.md).
+ * Restyling the site starts here: components only reference these tokens.
+ */
+@theme {
+  --color-ink: #0b0b0b;
+  --color-charcoal: #252525;
+  --color-cream: #d8cfbd;
+  --color-red: #b52b2b; /* decoration only (stars, strokes) */
+  --color-red-ui: #a42626; /* buttons with cream text: 4.71:1 */
+  --color-red-text: #e46464; /* red text on dark: 5.91:1 on ink */
+  --color-olive: #686448; /* borders/decoration only */
+
+  --font-display: var(--font-rock-salt), "Comic Sans MS", cursive;
+  --font-heading: var(--font-oswald), "Arial Narrow", sans-serif;
+  --font-body: var(--font-special-elite), "Courier New", monospace;
+}
+
+@layer base {
+  html {
+    background-color: var(--color-ink);
+    color: var(--color-cream);
+    font-family: var(--font-body);
+  }
+
+  body {
+    min-height: 100dvh;
+    /* Grime layer: low-opacity texture over flat ink so text contrast stays intact. */
+    background-image:
+      linear-gradient(rgb(11 11 11 / 0.88), rgb(11 11 11 / 0.88)),
+      url("/brand/texture-grunge.jpg");
+    background-size: auto, 480px auto;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--color-cream);
+    outline-offset: 3px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation: none !important;
+      transition: none !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  .panel-paper {
+    background-color: var(--color-cream);
+    background-image:
+      linear-gradient(rgb(216 207 189 / 0.82), rgb(216 207 189 / 0.82)),
+      url("/brand/texture-paper.jpg");
+    background-size: auto, 280px auto;
+    color: var(--color-ink);
+  }
+
+  .hero-atmosphere {
+    background-image: url("/brand/hero-placeholder.jpg");
+    background-size: cover;
+    background-position: center;
+    opacity: 0.4;
+    filter: blur(4px);
+  }
+
+  .btn-primary {
+    display: inline-block;
+    background-color: var(--color-red-ui);
+    color: var(--color-cream);
+    font-family: var(--font-heading);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.75rem 1.25rem;
+  }
+
+  .btn-primary:hover {
+    background-color: #8f2121;
+  }
+}

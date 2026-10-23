@@ -1,0 +1,211 @@
+// The Leftovers — database schema.
+// Auth tables (User, Session, Account, Verification, Passkey, RateLimit) follow the
+// field names Better Auth expects; everything else is application data.
+// All timestamps are stored in UTC (timestamptz).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+// ---------------------------------------------------------------- auth
+
+model User {
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  role          Role      @default(MEMBER)
+  /// Set when an Admin removes the user. Row is kept so the audit log stays intact.
+  deactivatedAt DateTime? @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @db.Timestamptz(3)
+
+  sessions      Session[]
+  accounts      Account[]
+  passkeys      Passkey[]
+  invitesSent   Invite[]     @relation("InviteSender")
+  invitesUsed   Invite[]     @relation("InviteAcceptedBy")
+  auditEntries  AuditLog[]
+  bandMember    BandMember?
+
+  @@index([role, deactivatedAt])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime @db.Timestamptz(3)
+  token     String   @unique
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime? @db.Timestamptz(3)
+  refreshTokenExpiresAt DateTime? @db.Timestamptz(3)
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model Passkey {
+  id           String    @id
+  name         String?
+  publicKey    String
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credentialID String
+  counter      Int
+  deviceType   String
+  backedUp     Boolean
+  transports   String?
+  aaguid       String?
+  createdAt    DateTime? @default(now()) @db.Timestamptz(3)
+
+  @@index([userId])
+  @@index([credentialID])
+  @@map("passkey")
+}
+
+model RateLimit {
+  id          String @id
+  key         String @unique
+  count       Int
+  lastRequest BigInt
+
+  @@map("rateLimit")
+}
+
+// ---------------------------------------------------------------- invites
+
+model Invite {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String
+  name         String
+  role         Role
+  /// SHA-256 of the token in the invite link. The raw token is never stored.
+  tokenHash    String    @unique
+  expiresAt    DateTime  @db.Timestamptz(3)
+  acceptedAt   DateTime? @db.Timestamptz(3)
+  revokedAt    DateTime? @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+  invitedById  String
+  invitedBy    User      @relation("InviteSender", fields: [invitedById], references: [id])
+  acceptedById String?
+  acceptedBy   User?     @relation("InviteAcceptedBy", fields: [acceptedById], references: [id])
+
+  @@index([email])
+  @@map("invite")
+}
+
+// ---------------------------------------------------------------- audit
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  /// Null for system actions (e.g. the bootstrap CLI).
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id])
+  actorRole  Role?
+  action     String
+  targetType String
+  targetId   String?
+  before     Json?
+  after      Json?
+  requestId  String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([createdAt(sort: Desc)])
+  @@index([targetType, targetId])
+  @@map("audit_log")
+}
+
+// ---------------------------------------------------------------- content
+
+model BandMember {
+  id         String   @id @default(uuid()) @db.Uuid
+  name       String
+  instrument String   @default("")
+  /// Content blocks (see src/lib/content/blocks.ts). Empty array = "Bio coming soon".
+  bio        Json     @default("[]")
+  sortOrder  Int
+  isVisible  Boolean  @default(true)
+  /// Optional link to a login account. Public profile and permissions are separate.
+  userId     String?  @unique
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  version    Int      @default(1)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([sortOrder])
+  @@map("band_member")
+}
+
+model Page {
+  /// One of the slugs in src/lib/content/pages.ts.
+  slug        String   @id
+  title       String
+  /// Content blocks (see src/lib/content/blocks.ts).
+  content     Json     @default("[]")
+  version     Int      @default(1)
+  updatedById String?
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("page")
+}
+
+model SiteSettings {
+  /// Singleton row; always 1.
+  id             Int      @id @default(1)
+  tagline        String   @default("")
+  bookingEmail   String   @default("")
+  generalEmail   String   @default("")
+  copyrightEmail String   @default("")
+  /// Array of { platform, url } (see src/lib/content/settings.ts).
+  socialLinks    Json     @default("[]")
+  version        Int      @default(1)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("site_settings")
+}

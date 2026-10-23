@@ -1,0 +1,11 @@
+# Supply-chain guard: only install package versions published at least 3 days ago.
+minimumReleaseAge: 4320
+minimumReleaseAgeStrict: true
+
+# Packages allowed to run install scripts. Everything else is blocked.
+allowBuilds:
+  '@prisma/engines': true
+  esbuild: true
+  prisma: true
+  unrs-resolver: true
+  sharp: true
