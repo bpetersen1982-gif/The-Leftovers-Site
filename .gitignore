@@ -38,7 +38,9 @@ Thumbs.db
 
 # Local tooling
 .vercel/
-.railway/
+# .railway/railway.ts is Infrastructure as Code (committed); anything else in it stays local.
+.railway/*
+!.railway/railway.ts
 .turbo/
 
 # Raw downloads (regenerate per data/zcta/README.md)

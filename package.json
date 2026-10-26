@@ -58,6 +58,7 @@
     "@types/web-push": "3.6.4",
     "eslint": "9.39.5",
     "eslint-config-next": "16.4.2",
+    "railway": "3.16.0",
     "tailwindcss": "4.3.3",
     "tsx": "4.23.15",
     "typescript": "6.0.3",
