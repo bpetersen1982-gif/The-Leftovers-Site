@@ -17,10 +17,11 @@ import {
   rejectPhotos,
   requestPhotoRemoval,
   restorePhoto,
+  takedownPhoto,
   submitPhotos,
   updatePhotoDetails,
 } from "@/lib/photos/workflow";
-import { photoDetailsSchema, photoRefSchema, type PhotoRef, uploadRequestSchema } from "@/lib/photos/validation";
+import { photoDetailsSchema, photoRefSchema, type PhotoRef, takedownNoticeSchema, uploadRequestSchema } from "@/lib/photos/validation";
 import { getRequestId } from "@/lib/request-id";
 import { objectStorage } from "@/lib/storage";
 import type { ActionState } from "../action-state";
@@ -249,6 +250,29 @@ export async function decideRemovalAction(_previous: ActionState, formData: Form
       return { ok: true, message: "Back on the site." };
     }
     return { ok: false, message: "Choose delete or put back." };
+  } catch (error) {
+    return expected(error);
+  }
+}
+
+// ---------------------------------------------------------------- copyright takedown (Admins)
+
+export async function takedownPhotoAction(_previous: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await requirePermission("media:takedown");
+  const ref = refFrom(formData);
+  if (!ref.success) return { ok: false, message: "That photo isn't valid." };
+  const notice = takedownNoticeSchema.safeParse({
+    senderName: String(formData.get("senderName") ?? ""),
+    senderEmail: String(formData.get("senderEmail") ?? ""),
+    workClaimed: String(formData.get("workClaimed") ?? ""),
+    receivedOn: String(formData.get("receivedOn") ?? ""),
+    notes: String(formData.get("notes") ?? ""),
+  });
+  if (!notice.success) return { ok: false, message: "Fix the highlighted fields.", fieldErrors: fieldErrorsOf(notice.error) };
+  try {
+    const result = await takedownPhoto(photoDeps(), actor, ref.data, notice.data, await getRequestId());
+    refresh();
+    return { ok: true, message: `Taken down and the notice is recorded.${result.filesRemoved ? "" : FILES_WARNING}` };
   } catch (error) {
     return expected(error);
   }

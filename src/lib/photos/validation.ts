@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isIsoDate, todayInBandTimeZone } from "../dates";
 import { ACCEPTED_EXTENSIONS, ACCEPTED_TYPES, type ImageKind } from "./image";
 
 /** Requirements MED-2: 25 MB per photo. */
@@ -67,3 +68,20 @@ export const bulkRefsSchema = z.array(photoRefSchema).min(1, "Pick at least one 
 
 export const rejectionReasonSchema = singleLine(MAX_REJECTION_REASON, "Reason");
 export const removalReasonSchema = singleLine(MAX_REJECTION_REASON, "Reason");
+
+/** What an Admin records from an emailed copyright notice (LEG-3). */
+export const takedownNoticeSchema = z.strictObject({
+  senderName: singleLine(120, "Sender name").pipe(z.string().min(1, "Who sent the notice?")),
+  senderEmail: z.string().trim().toLowerCase().pipe(z.email("Enter the sender's email address.").max(254)),
+  workClaimed: singleLine(300, "Work claimed").pipe(z.string().min(1, "What work do they say is theirs?")),
+  receivedOn: z
+    .string()
+    .trim()
+    .refine(isIsoDate, "Use a real date (YYYY-MM-DD).")
+    .refine((value) => value <= todayInBandTimeZone(), "That date is in the future."),
+  notes: z
+    .string()
+    .transform((value) => value.replace(/\r\n?/g, "\n").trim())
+    .pipe(z.string().max(1000, "Notes must be 1000 characters or fewer")),
+});
+export type TakedownNoticeInput = z.input<typeof takedownNoticeSchema>;

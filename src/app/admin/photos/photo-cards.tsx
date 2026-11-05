@@ -2,11 +2,11 @@
 
 import { useId } from "react";
 import type { PhotoStatus } from "@/generated/prisma/enums";
-import type { PhotoImage } from "@/lib/photos/queries";
+import type { PhotoImage, TakedownSummary } from "@/lib/photos/queries";
 import { INITIAL_ACTION_STATE } from "../action-state";
 import { DARK_INPUT_CLASS, FieldError, FormMessage, LABEL_CLASS, SECONDARY_BUTTON } from "../form-ui";
 import { useActionForm } from "../use-action-form";
-import { decideRemovalAction, deletePhotoAction, removePhotoAction, reviewPhotosAction, savePhotoAction } from "./actions";
+import { decideRemovalAction, deletePhotoAction, removePhotoAction, reviewPhotosAction, savePhotoAction, takedownPhotoAction } from "./actions";
 
 /** What the cards need about a photo (serializable from the server page). */
 export interface CardPhoto {
@@ -260,7 +260,7 @@ function RemoveForm({ photo, isAdmin }: { photo: CardPhoto; isAdmin: boolean }) 
 }
 
 /** A published photo: Admins can fix details; everyone in the band can take it down. */
-export function PublishedCard({ photo, isAdmin }: { photo: CardPhoto; isAdmin: boolean }) {
+export function PublishedCard({ photo, isAdmin, today }: { photo: CardPhoto; isAdmin: boolean; today: string }) {
   return (
     <article className="space-y-2 border border-olive/60 p-3" aria-label={photo.altText}>
       <Thumb photo={photo} />
@@ -280,13 +280,44 @@ export function PublishedCard({ photo, isAdmin }: { photo: CardPhoto; isAdmin: b
           <RemoveForm photo={photo} isAdmin={isAdmin} />
         </div>
       </details>
+      {isAdmin && <TakedownDetails photo={photo} today={today} />}
     </article>
   );
 }
 
-/** Taken off the site; Admins delete it for good or put it back (APR-7 step 2). */
-export function RemovedCard({ photo, isAdmin }: { photo: CardPhoto; isAdmin: boolean }) {
+/** Admin decision for a photo that's off the site: delete for good, or put it back. */
+function DecideButtons({ photo }: { photo: CardPhoto }) {
   const [state, onSubmit, pending] = useActionForm(decideRemovalAction, INITIAL_ACTION_STATE);
+  return (
+    <>
+      <form
+        onSubmit={(event) => {
+          const submitter = (event.nativeEvent as SubmitEvent).submitter;
+          const purging = submitter instanceof HTMLButtonElement && submitter.value === "purge";
+          if (purging && !window.confirm("Delete this photo for good? This can't be undone.")) {
+            event.preventDefault();
+            return;
+          }
+          onSubmit(event);
+        }}
+        className="flex flex-wrap gap-2"
+      >
+        <input type="hidden" name="id" value={photo.id} />
+        <input type="hidden" name="version" value={photo.version} />
+        <button type="submit" name="intent" value="purge" disabled={pending} className="btn-primary disabled:opacity-60">
+          Delete permanently
+        </button>
+        <button type="submit" name="intent" value="restore" disabled={pending} className={SECONDARY_BUTTON}>
+          Put back on site
+        </button>
+      </form>
+      <FormMessage ok={state.ok} message={state.ok ? null : state.message} />
+    </>
+  );
+}
+
+/** Taken off the site; Admins delete it for good or put it back (APR-7 step 2). */
+export function RemovedCard({ photo, isAdmin, today }: { photo: CardPhoto; isAdmin: boolean; today: string }) {
   return (
     <article className="space-y-2 border border-olive/60 p-3" aria-label={`Removed: ${photo.altText}`}>
       <Thumb photo={photo} />
@@ -296,31 +327,122 @@ export function RemovedCard({ photo, isAdmin }: { photo: CardPhoto; isAdmin: boo
         {photo.removalReason ? `: ${photo.removalReason}` : ""}
       </p>
       {isAdmin ? (
-        <form
-          onSubmit={(event) => {
-            const submitter = (event.nativeEvent as SubmitEvent).submitter;
-            const purging = submitter instanceof HTMLButtonElement && submitter.value === "purge";
-            if (purging && !window.confirm("Delete this photo for good? This can't be undone.")) {
-              event.preventDefault();
-              return;
-            }
-            onSubmit(event);
-          }}
-          className="flex flex-wrap gap-2"
-        >
-          <input type="hidden" name="id" value={photo.id} />
-          <input type="hidden" name="version" value={photo.version} />
-          <button type="submit" name="intent" value="purge" disabled={pending} className="btn-primary disabled:opacity-60">
-            Delete permanently
-          </button>
-          <button type="submit" name="intent" value="restore" disabled={pending} className={SECONDARY_BUTTON}>
-            Put back on site
-          </button>
-        </form>
+        <>
+          <DecideButtons photo={photo} />
+          <TakedownDetails photo={photo} today={today} />
+        </>
       ) : (
         <p className="text-sm">Hidden from the public. An Admin will delete it or put it back.</p>
       )}
-      <FormMessage ok={state.ok} message={state.ok ? null : state.message} />
+    </article>
+  );
+}
+
+/**
+ * Admin-only copyright takedown (LEG-3). Used after an Admin reviews a notice emailed to
+ * copyright@ and judges it legitimate. Records who sent it and what they claim.
+ */
+function TakedownDetails({ photo, today }: { photo: CardPhoto; today: string }) {
+  const [state, onSubmit, pending] = useActionForm(takedownPhotoAction, INITIAL_ACTION_STATE);
+  const prefix = useId();
+  const errors = state.fieldErrors;
+  const field = (name: string) => ({
+    id: `${prefix}-${name}`,
+    name,
+    className: DARK_INPUT_CLASS,
+    "aria-invalid": Boolean(errors?.[name]),
+    "aria-describedby": errors?.[name] ? `${prefix}-${name}-error` : undefined,
+  });
+  return (
+    <details>
+      <summary className="cursor-pointer text-sm underline">Copyright takedown</summary>
+      <form
+        onSubmit={(event) => {
+          if (!window.confirm("Take this photo down and record the copyright notice?")) {
+            event.preventDefault();
+            return;
+          }
+          onSubmit(event);
+        }}
+        className="mt-3 space-y-3"
+      >
+        <p className="text-sm">Fill this in from the notice emailed to copyright@. The photo comes off the site right away.</p>
+        <input type="hidden" name="id" value={photo.id} />
+        <input type="hidden" name="version" value={photo.version} />
+        <div>
+          <label htmlFor={`${prefix}-senderName`} className={LABEL_CLASS}>
+            Sent by
+          </label>
+          <input {...field("senderName")} maxLength={120} placeholder="Person or company" />
+          <FieldError id={`${prefix}-senderName-error`} message={errors?.senderName} />
+        </div>
+        <div>
+          <label htmlFor={`${prefix}-senderEmail`} className={LABEL_CLASS}>
+            Their email
+          </label>
+          <input {...field("senderEmail")} type="email" maxLength={254} />
+          <FieldError id={`${prefix}-senderEmail-error`} message={errors?.senderEmail} />
+        </div>
+        <div>
+          <label htmlFor={`${prefix}-workClaimed`} className={LABEL_CLASS}>
+            Work they claim
+          </label>
+          <input {...field("workClaimed")} maxLength={300} placeholder="e.g. their photograph, a song recording" />
+          <FieldError id={`${prefix}-workClaimed-error`} message={errors?.workClaimed} />
+        </div>
+        <div>
+          <label htmlFor={`${prefix}-receivedOn`} className={LABEL_CLASS}>
+            Date received
+          </label>
+          <input {...field("receivedOn")} type="date" max={today} defaultValue={today} />
+          <FieldError id={`${prefix}-receivedOn-error`} message={errors?.receivedOn} />
+        </div>
+        <div>
+          <label htmlFor={`${prefix}-notes`} className={LABEL_CLASS}>
+            Notes (optional)
+          </label>
+          <textarea {...field("notes")} rows={2} maxLength={1000} />
+          <FieldError id={`${prefix}-notes-error`} message={errors?.notes} />
+        </div>
+        <button type="submit" disabled={pending} className="btn-primary disabled:opacity-60">
+          Take down
+        </button>
+        <FormMessage ok={state.ok} message={state.message} />
+      </form>
+    </details>
+  );
+}
+
+/** A photo taken down after a copyright notice. Only Admins see these. */
+export function TakenDownCard({ photo, notice }: { photo: CardPhoto; notice: TakedownSummary | null }) {
+  return (
+    <article className="space-y-2 border border-red-text/60 p-3" aria-label={`Taken down: ${photo.altText}`}>
+      <Thumb photo={photo} />
+      <p className="text-sm">{photo.altText}</p>
+      {notice ? (
+        <dl className="space-y-1 text-xs">
+          <div>
+            <dt className="inline font-semibold">Notice from: </dt>
+            <dd className="inline">
+              {notice.senderName} ({notice.senderEmail})
+            </dd>
+          </div>
+          <div>
+            <dt className="inline font-semibold">Claims: </dt>
+            <dd className="inline">{notice.workClaimed}</dd>
+          </div>
+          <div>
+            <dt className="inline font-semibold">Received: </dt>
+            <dd className="inline">{notice.receivedOn}</dd>
+          </div>
+          <div>
+            <dt className="inline font-semibold">Taken down by: </dt>
+            <dd className="inline">{notice.actedByName}</dd>
+          </div>
+          {notice.notes && <p className="whitespace-pre-line">{notice.notes}</p>}
+        </dl>
+      ) : null}
+      <DecideButtons photo={photo} />
     </article>
   );
 }

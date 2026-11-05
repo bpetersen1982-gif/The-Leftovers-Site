@@ -36,6 +36,7 @@ export const AUDIT_ACTION_LABELS = {
   "photo.remove": "Took photo off the site",
   "photo.restore": "Put photo back on the site",
   "photo.purge": "Permanently deleted photo",
+  "media.takedown": "Took down after a copyright notice",
   "album.create": "Created album",
   "album.update": "Edited album",
   "album.delete": "Deleted album",

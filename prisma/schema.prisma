@@ -45,6 +45,8 @@ model User {
   photosDecided            Photo[]             @relation("PhotoDecider")
   photoRemovalsRequested   Photo[]             @relation("PhotoRemovalRequester")
   albumsCreated            Album[]
+  takedownsActed           TakedownNotice[]    @relation("TakedownActor")
+  takedownsResolved        TakedownNotice[]    @relation("TakedownResolver")
   /// NOT-5: booking alerts by email / phone push. Both on by default.
   bookingEmailAlerts       Boolean             @default(true)
   bookingPushAlerts        Boolean             @default(true)
@@ -515,6 +517,8 @@ enum PhotoStatus {
   REJECTED
   /// Was public; a Member or Admin took it off the site (APR-7). An Admin deletes it or puts it back.
   DELETION_REQUESTED
+  /// Unpublished by an Admin after a copyright notice (LEG-3). Only an Admin can restore it.
+  TAKEN_DOWN
   /// The file couldn't be used (wrong type, corrupt, too large). Original already deleted.
   FAILED
 }
@@ -621,4 +625,44 @@ model AlbumItem {
   @@index([albumId, sortOrder])
   @@index([photoId])
   @@map("album_item")
+}
+
+// ---------------------------------------------------------------- copyright takedowns
+
+enum MediaKind {
+  PHOTO
+  VIDEO
+}
+
+enum TakedownResolution {
+  RESTORED
+  DELETED
+}
+
+/// A copyright notice an Admin acted on (requirements LEG-3). Kept permanently, even after
+/// the photo or video is deleted, so there's no foreign key to the media.
+model TakedownNotice {
+  id           String              @id @default(uuid()) @db.Uuid
+  mediaKind    MediaKind
+  mediaId      String              @db.Uuid
+  /// What the item was (alt text / title) at the time, since it may be deleted later.
+  mediaLabel   String
+  senderName   String
+  senderEmail  String
+  workClaimed  String
+  /// Date the notice arrived (band time zone).
+  receivedOn   DateTime            @db.Date
+  notes        String              @default("")
+  actedById    String
+  actedBy      User                @relation("TakedownActor", fields: [actedById], references: [id])
+  actedByRole  Role
+  createdAt    DateTime            @default(now()) @db.Timestamptz(3)
+  resolution   TakedownResolution?
+  resolvedAt   DateTime?           @db.Timestamptz(3)
+  resolvedById String?
+  resolvedBy   User?               @relation("TakedownResolver", fields: [resolvedById], references: [id])
+
+  @@index([mediaKind, mediaId])
+  @@index([createdAt(sort: Desc)])
+  @@map("takedown_notice")
 }

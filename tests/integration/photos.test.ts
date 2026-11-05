@@ -4,7 +4,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Role } from "@/generated/prisma/enums";
 import { PhotoError } from "@/lib/photos/errors";
 import { originalKey, parseStoredFiles, privateFileKey } from "@/lib/photos/files";
-import { getBandPhotoBoard, getPublicPhoto, listPublicPhotos, publicImage } from "@/lib/photos/queries";
+import { getBandPhotoBoard, getPublicPhoto, listPublicPhotos, listTakedownNotices, publicImage } from "@/lib/photos/queries";
 import { completeUpload, createUpload } from "@/lib/photos/upload";
 import {
   approvePhotos,
@@ -14,6 +14,7 @@ import {
   requestPhotoRemoval,
   restorePhoto,
   submitPhotos,
+  takedownPhoto,
   updatePhotoDetails,
 } from "@/lib/photos/workflow";
 import { createTestStorage, resetStorage } from "../support/storage";
@@ -360,6 +361,82 @@ describe("removing published photos", () => {
     const draftRow = await current(draft.photoId);
     await expect(requestPhotoRemoval(deps, erik, { id: draft.photoId, version: draftRow.version }, "")).rejects.toMatchObject({ code: "INVALID_STATE" });
     await expect(purgePhoto(deps, erik, { id: draft.photoId, version: draftRow.version })).rejects.toMatchObject({ code: "INVALID_STATE" });
+  });
+});
+
+describe("copyright takedowns", () => {
+  const NOTICE = {
+    senderName: "  Rights Holder LLC ",
+    senderEmail: "Legal@Example.TEST",
+    workClaimed: "Sound recording of a song in the background",
+    receivedOn: "2026-10-20",
+    notes: "Emailed copyright@ on the 20th.",
+  };
+
+  async function publishedBy(admin: { id: string; role: Role }) {
+    const { photoId } = await upload(admin, await sampleJpeg());
+    await submitPhotos(deps, admin, [await describeAndRef(admin, photoId, "Encore")]);
+    return current(photoId);
+  }
+
+  it("lets only Admins take a photo down, records the notice, and removes public files", async () => {
+    const admin = await makeUser("ADMIN");
+    const member = await makeUser("MEMBER");
+    const photo = await publishedBy(admin);
+    const url = publicImage(storage, photo)?.src ?? "";
+    const ref = { id: photo.id, version: photo.version };
+
+    await expect(takedownPhoto(deps, member, ref, NOTICE)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(takedownPhoto(deps, admin, ref, { ...NOTICE, receivedOn: "2999-01-01" })).rejects.toThrow(/future/);
+    await expect(takedownPhoto(deps, admin, ref, { ...NOTICE, senderEmail: "nope" })).rejects.toThrow(/email/);
+
+    expect(await takedownPhoto(deps, admin, ref, NOTICE)).toEqual({ filesRemoved: true });
+    expect(await current(photo.id)).toMatchObject({ status: "TAKEN_DOWN", publicPrefix: null });
+    expect((await fetch(url)).ok).toBe(false);
+    expect(await getPublicPhoto(prisma, storage, photo.id)).toBeNull();
+
+    const [notice] = await listTakedownNotices(prisma);
+    expect(notice).toMatchObject({
+      mediaKind: "PHOTO",
+      mediaLabel: "Encore",
+      senderName: "Rights Holder LLC",
+      senderEmail: "legal@example.test",
+      receivedOn: "2026-10-20",
+      actedByName: "Erik Admin",
+      resolution: null,
+    });
+    // The sender's email is kept in the notice, not copied into the audit log.
+    const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: "media.takedown" } });
+    expect(JSON.stringify(audit.after)).not.toContain("legal@example.test");
+
+    const adminBoard = await getBandPhotoBoard(prisma, storage, admin);
+    expect(adminBoard.takenDown.map((item) => [item.id, item.notice?.workClaimed])).toEqual([[photo.id, NOTICE.workClaimed]]);
+    expect((await getBandPhotoBoard(prisma, storage, member)).takenDown).toEqual([]);
+    // Members can't restore it.
+    const down = await current(photo.id);
+    await expect(restorePhoto(deps, member, { id: photo.id, version: down.version })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("restoring or deleting closes the notice; the notice outlives the photo", async () => {
+    const admin = await makeUser("ADMIN");
+    const first = await publishedBy(admin);
+    await takedownPhoto(deps, admin, { id: first.id, version: first.version }, NOTICE);
+    await restorePhoto(deps, admin, { id: first.id, version: (await current(first.id)).version });
+    expect((await current(first.id)).status).toBe("APPROVED");
+    expect((await listTakedownNotices(prisma))[0]).toMatchObject({ resolution: "RESTORED", resolvedByName: "Erik Admin" });
+
+    const second = await publishedBy(admin);
+    // A notice can also be recorded against a photo a Member already took off the site.
+    await requestPhotoRemoval(deps, admin, { id: second.id, version: second.version }, "");
+    await takedownPhoto(deps, admin, { id: second.id, version: (await current(second.id)).version }, NOTICE);
+    await purgePhoto(deps, admin, { id: second.id, version: (await current(second.id)).version });
+    expect(await prisma.photo.findUnique({ where: { id: second.id } })).toBeNull();
+    const notices = await listTakedownNotices(prisma);
+    expect(notices.map((notice) => notice.resolution)).toEqual(["DELETED", "RESTORED"]);
+    // Drafts can't be "taken down" (they were never public).
+    const { photoId } = await upload(admin, await sampleJpeg());
+    const draft = await current(photoId);
+    await expect(takedownPhoto(deps, admin, { id: photoId, version: draft.version }, NOTICE)).rejects.toMatchObject({ code: "INVALID_STATE" });
   });
 });
 

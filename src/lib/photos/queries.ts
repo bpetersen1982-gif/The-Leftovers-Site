@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 import type { PhotoStatus, Role } from "@/generated/prisma/enums";
+import { fromUtc, type IsoDate } from "../dates";
 import { can } from "../permissions";
 import type { ObjectStorage } from "../storage";
 import { parseStoredFiles, privateFileKey, publicFileKey, type StoredFile } from "./files";
@@ -106,6 +107,67 @@ export interface BandPhotoBoard {
   readonly publishedTotal: number;
   /** Taken off the site, waiting for an Admin to delete or restore (APR-7). */
   readonly removed: readonly BandPhoto[];
+  /** Copyright takedowns with their open notice. Admins only; empty for Members. */
+  readonly takenDown: readonly (BandPhoto & { readonly notice: TakedownSummary | null })[];
+}
+
+export interface TakedownSummary {
+  readonly id: string;
+  readonly mediaKind: "PHOTO" | "VIDEO";
+  readonly mediaLabel: string;
+  readonly senderName: string;
+  readonly senderEmail: string;
+  readonly workClaimed: string;
+  readonly receivedOn: IsoDate;
+  readonly notes: string;
+  readonly actedByName: string;
+  readonly createdAt: Date;
+  readonly resolution: "RESTORED" | "DELETED" | null;
+  readonly resolvedByName: string | null;
+  readonly resolvedAt: Date | null;
+}
+
+const NOTICE_SELECT = {
+  id: true,
+  mediaKind: true,
+  mediaId: true,
+  mediaLabel: true,
+  senderName: true,
+  senderEmail: true,
+  workClaimed: true,
+  receivedOn: true,
+  notes: true,
+  createdAt: true,
+  resolution: true,
+  resolvedAt: true,
+  actedBy: { select: { name: true } },
+  resolvedBy: { select: { name: true } },
+} as const;
+
+type NoticeRow = Prisma.TakedownNoticeGetPayload<{ select: typeof NOTICE_SELECT }>;
+
+function toNotice(row: NoticeRow): TakedownSummary {
+  return {
+    id: row.id,
+    mediaKind: row.mediaKind,
+    mediaLabel: row.mediaLabel,
+    senderName: row.senderName,
+    senderEmail: row.senderEmail,
+    workClaimed: row.workClaimed,
+    receivedOn: fromUtc(row.receivedOn),
+    notes: row.notes,
+    actedByName: row.actedBy.name,
+    createdAt: row.createdAt,
+    resolution: row.resolution,
+    resolvedByName: row.resolvedBy?.name ?? null,
+    resolvedAt: row.resolvedAt,
+  };
+}
+
+/** Every notice acted on, newest first (the permanent record, LEG-3). */
+export async function listTakedownNotices(prisma: PrismaClient, limit = 50): Promise<TakedownSummary[]> {
+  const rows = await prisma.takedownNotice.findMany({ orderBy: { createdAt: "desc" }, take: limit, select: NOTICE_SELECT });
+  return rows.map(toNotice);
 }
 
 const BAND_SELECT = {
@@ -141,7 +203,7 @@ export async function getBandPhotoBoard(
   viewer: { id: string; role: Role },
 ): Promise<BandPhotoBoard> {
   const reviewsAll = can(viewer.role, "photos:review");
-  const [mine, pending, published, publishedTotal, removed] = await Promise.all([
+  const [mine, pending, published, publishedTotal, removed, takenDown] = await Promise.all([
     prisma.photo.findMany({
       where: { uploaderId: viewer.id, status: { in: ["DRAFT", "REJECTED", "FAILED"] } },
       orderBy: { createdAt: "asc" },
@@ -164,7 +226,19 @@ export async function getBandPhotoBoard(
       orderBy: { removalRequestedAt: "asc" },
       select: BAND_SELECT,
     }),
+    reviewsAll
+      ? prisma.photo.findMany({ where: { status: "TAKEN_DOWN" }, orderBy: { updatedAt: "desc" }, select: BAND_SELECT })
+      : Promise.resolve([]),
   ]);
+  const openNotices = takenDown.length
+    ? await prisma.takedownNotice.findMany({
+        where: { mediaKind: "PHOTO", mediaId: { in: takenDown.map((row) => row.id) }, resolution: null },
+        orderBy: { createdAt: "desc" },
+        select: NOTICE_SELECT,
+      })
+    : [];
+  const noticeFor = new Map<string, TakedownSummary>();
+  for (const row of openNotices) if (!noticeFor.has(row.mediaId)) noticeFor.set(row.mediaId, toNotice(row));
 
   type Row = (typeof mine)[number];
   const toBand = async (row: Row): Promise<BandPhoto> => ({
@@ -195,6 +269,7 @@ export async function getBandPhotoBoard(
     published: await Promise.all(published.map(toBand)),
     publishedTotal,
     removed: await Promise.all(removed.map(toBand)),
+    takenDown: await Promise.all(takenDown.map(async (row) => ({ ...(await toBand(row)), notice: noticeFor.get(row.id) ?? null }))),
   };
 }
 

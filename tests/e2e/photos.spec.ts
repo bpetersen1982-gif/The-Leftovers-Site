@@ -233,3 +233,44 @@ test("an admin builds a public album from published photos", async ({ browser, p
   const hidden = await anonymous.goto("/photos/albums/zoo-bar-october-2026");
   expect(hidden?.status()).toBe(404);
 });
+
+test("an admin records a copyright takedown, and only an admin can put the photo back", async ({ browser, page: anonymous }) => {
+  const erik = await signedInPage(browser, ADMIN.email);
+  await erik.goto("/admin/photos");
+  await erik.getByLabel("Choose photos").setInputFiles({ name: "IMG_5001.JPG", mimeType: "image/jpeg", buffer: await jpeg() });
+  await expect(erik.getByText("Ready below")).toBeVisible({ timeout: 30_000 });
+  const draft = erik.getByRole("article", { name: "IMG_5001.JPG" });
+  await draft.getByLabel("Alt text (required)").fill("Full band at the Bourbon");
+  await draft.getByRole("button", { name: "Save and publish" }).click();
+  await expect(erik.getByRole("heading", { name: "Published (1)" })).toBeVisible();
+  await anonymous.goto("/photos");
+  const src = await expectImageLoaded(anonymous, "Full band at the Bourbon");
+
+  const card = erik.getByRole("article", { name: "Full band at the Bourbon" });
+  await card.getByText("Copyright takedown").click();
+  await card.getByLabel("Sent by").fill("Stage Photos Inc.");
+  await card.getByLabel("Their email").fill("legal@stagephotos.example");
+  await card.getByLabel("Work they claim").fill("Their photographer's image");
+  erik.once("dialog", (dialog) => void dialog.accept());
+  await card.getByRole("button", { name: "Take down" }).click();
+  await expect(erik.getByRole("heading", { name: "Copyright takedowns (1)" })).toBeVisible();
+  const down = erik.getByRole("article", { name: "Taken down: Full band at the Bourbon" });
+  await expect(down.getByText("Stage Photos Inc. (legal@stagephotos.example)")).toBeVisible();
+  await expect(erik.getByText("Still down")).toBeVisible();
+
+  await anonymous.goto("/photos");
+  await expect(anonymous.getByText("Photos from our shows are coming soon.")).toBeVisible();
+  expect((await anonymous.request.get(src)).ok()).toBe(false);
+
+  // Members don't see takedowns at all.
+  const member = await signedInPage(browser, MEMBER.email);
+  await member.goto("/admin/photos");
+  await expect(member.getByRole("heading", { name: /Copyright takedowns/ })).toHaveCount(0);
+  await expect(member.getByText("Copyright takedown")).toHaveCount(0);
+
+  await down.getByRole("button", { name: "Put back on site" }).click();
+  await expect(erik.getByRole("heading", { name: "Published (1)" })).toBeVisible();
+  await expect(erik.getByText(`Restored by ${ADMIN.name}`)).toBeVisible();
+  await anonymous.goto("/photos");
+  await expectImageLoaded(anonymous, "Full band at the Bourbon");
+});

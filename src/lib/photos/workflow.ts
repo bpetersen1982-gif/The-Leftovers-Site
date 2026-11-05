@@ -1,6 +1,7 @@
 import type { Prisma } from "@/generated/prisma/client";
 import type { PhotoStatus } from "@/generated/prisma/enums";
 import { type AuditActor, writeAudit } from "../audit";
+import { toDbDate } from "../dates";
 import { logger } from "../logger";
 import { can } from "../permissions";
 import { PhotoError } from "./errors";
@@ -22,6 +23,8 @@ import {
   photoRefSchema,
   rejectionReasonSchema,
   removalReasonSchema,
+  type TakedownNoticeInput,
+  takedownNoticeSchema,
 } from "./validation";
 
 /**
@@ -127,10 +130,19 @@ async function removePublicCopies(deps: PhotoDeps, photoId: string, keys: readon
 const PUBLISH_AUDIT: Partial<Record<PhotoStatus, "photo.approve" | "photo.restore">> = {
   PENDING_REVIEW: "photo.approve",
   DELETION_REQUESTED: "photo.restore",
+  TAKEN_DOWN: "photo.restore",
 };
 
 /** Publishes one photo the actor is allowed to publish. Returns false if it lost a race. */
-async function publish(deps: PhotoDeps, actor: AuditActor, photo: PhotoRow, from: readonly PhotoStatus[], requestId?: string | null): Promise<boolean> {
+async function publish(
+  deps: PhotoDeps,
+  actor: AuditActor,
+  photo: PhotoRow,
+  from: readonly PhotoStatus[],
+  requestId?: string | null,
+  /** Runs inside the same transaction, only if this publish wins. */
+  onWin?: (tx: Prisma.TransactionClient) => Promise<void>,
+): Promise<boolean> {
   const { prefix, keys } = await copyToPublic(deps, photo);
   const now = nowOf(deps);
   const won = await deps.prisma.$transaction(async (tx) => {
@@ -163,6 +175,7 @@ async function publish(deps: PhotoDeps, actor: AuditActor, photo: PhotoRow, from
       after: { status: "APPROVED", uploaderId: photo.uploaderId },
       requestId,
     });
+    await onWin?.(tx);
     return true;
   });
   if (!won) await removePublicCopies(deps, photo.id, keys);
@@ -356,13 +369,25 @@ async function tryRemovePublicFiles(deps: PhotoDeps, photoId: string): Promise<b
   }
 }
 
-/** Step 2a (Admins): puts a removed photo back on the site under a new URL. */
+/** Removed or taken-down photos an Admin can delete for good or put back. */
+const OFF_SITE: readonly PhotoStatus[] = ["DELETION_REQUESTED", "TAKEN_DOWN"];
+
+/** Closes the photo's open takedown notices (if any) with how it ended. */
+async function resolveNotices(tx: Prisma.TransactionClient, actor: AuditActor, photoId: string, resolution: "RESTORED" | "DELETED"): Promise<void> {
+  await tx.takedownNotice.updateMany({
+    where: { mediaKind: "PHOTO", mediaId: photoId, resolution: null },
+    data: { resolution, resolvedAt: new Date(), resolvedById: actor.id },
+  });
+}
+
+/** Step 2a (Admins): puts a removed or taken-down photo back on the site under a new URL. */
 export async function restorePhoto(deps: PhotoDeps, actor: AuditActor, input: PhotoRef, requestId?: string | null): Promise<void> {
   if (!can(actor.role, "photos:delete")) throw new PhotoError("FORBIDDEN");
   const ref = photoRefSchema.parse(input);
   const photo = await load(deps, ref);
-  if (photo.status !== "DELETION_REQUESTED") throw new PhotoError("INVALID_STATE");
-  if (!(await publish(deps, actor, photo, ["DELETION_REQUESTED"], requestId))) throw new PhotoError("CONFLICT");
+  if (!OFF_SITE.includes(photo.status)) throw new PhotoError("INVALID_STATE");
+  const won = await publish(deps, actor, photo, [photo.status], requestId, (tx) => resolveNotices(tx, actor, photo.id, "RESTORED"));
+  if (!won) throw new PhotoError("CONFLICT");
 }
 
 /**
@@ -373,11 +398,12 @@ export async function purgePhoto(deps: PhotoDeps, actor: AuditActor, input: Phot
   if (!can(actor.role, "photos:delete")) throw new PhotoError("FORBIDDEN");
   const ref = photoRefSchema.parse(input);
   const photo = await load(deps, ref);
-  if (photo.status !== "DELETION_REQUESTED") throw new PhotoError("INVALID_STATE");
+  if (!OFF_SITE.includes(photo.status)) throw new PhotoError("INVALID_STATE");
 
   await deps.prisma.$transaction(async (tx) => {
-    const deleted = await tx.photo.deleteMany({ where: { id: ref.id, version: ref.version, status: "DELETION_REQUESTED" } });
+    const deleted = await tx.photo.deleteMany({ where: { id: ref.id, version: ref.version, status: photo.status } });
     if (deleted.count !== 1) throw new PhotoError("CONFLICT");
+    await resolveNotices(tx, actor, ref.id, "DELETED");
     await writeAudit(tx, {
       actor,
       action: "photo.purge",
@@ -397,4 +423,58 @@ export async function purgePhoto(deps: PhotoDeps, actor: AuditActor, input: Phot
   const filesRemoved = await tryRemovePublicFiles(deps, ref.id);
   await removePrivateFiles(deps.storage, ref.id);
   return { filesRemoved };
+}
+
+// ---------------------------------------------------------------- copyright takedowns (LEG-3)
+
+/**
+ * Admin-only: after reviewing an emailed copyright notice, unpublishes the photo and
+ * records the notice. Works on published photos and ones already removed (so a notice
+ * about a hidden photo is still on record). Only an Admin can restore it afterwards.
+ */
+export async function takedownPhoto(
+  deps: PhotoDeps,
+  actor: AuditActor,
+  input: PhotoRef,
+  notice: TakedownNoticeInput,
+  requestId?: string | null,
+): Promise<RemovalResult> {
+  if (!can(actor.role, "media:takedown")) throw new PhotoError("FORBIDDEN");
+  const ref = photoRefSchema.parse(input);
+  const details = takedownNoticeSchema.parse(notice);
+  const photo = await load(deps, ref);
+  if (photo.status !== "APPROVED" && photo.status !== "DELETION_REQUESTED") throw new PhotoError("INVALID_STATE");
+
+  await deps.prisma.$transaction(async (tx) => {
+    const updated = await tx.photo.updateMany({
+      where: { id: ref.id, version: ref.version, status: photo.status },
+      data: { status: "TAKEN_DOWN", publicPrefix: null, version: { increment: 1 } },
+    });
+    if (updated.count !== 1) throw new PhotoError("CONFLICT");
+    const created = await tx.takedownNotice.create({
+      data: {
+        mediaKind: "PHOTO",
+        mediaId: ref.id,
+        mediaLabel: photo.altText || photo.originalFilename,
+        senderName: details.senderName,
+        senderEmail: details.senderEmail,
+        workClaimed: details.workClaimed,
+        receivedOn: toDbDate(details.receivedOn),
+        notes: details.notes,
+        actedById: actor.id,
+        actedByRole: actor.role,
+      },
+    });
+    await writeAudit(tx, {
+      actor,
+      action: "media.takedown",
+      targetType: "photo",
+      targetId: ref.id,
+      before: { status: photo.status },
+      // Sender's email stays in the notice record only, not the audit log.
+      after: { status: "TAKEN_DOWN", noticeId: created.id, workClaimed: details.workClaimed },
+      requestId,
+    });
+  });
+  return { filesRemoved: await tryRemovePublicFiles(deps, ref.id) };
 }
