@@ -52,9 +52,16 @@ export default async function AdminPhotosPage() {
     <div className="space-y-10">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <h1 className="font-heading text-3xl font-bold tracking-wider uppercase">Photos</h1>
-        <Link href="/photos" className="underline">
-          View public page
-        </Link>
+        <span className="flex gap-4">
+          {can(viewer.role, "albums:manage") && (
+            <Link href="/admin/photos/albums" className="underline">
+              Albums
+            </Link>
+          )}
+          <Link href="/photos" className="underline">
+            View public page
+          </Link>
+        </span>
       </div>
 
       <PhotoUploader publishesDirectly={publishesDirectly} />

@@ -178,3 +178,58 @@ test("a second admin takes a published photo down, then deletes it for good", as
   await expect(brandon.getByRole("heading", { name: "Removed from site (1)" })).toHaveCount(0);
   await expect(brandon.getByRole("heading", { name: "Published (0)" })).toBeVisible();
 });
+
+test("an admin builds a public album from published photos", async ({ browser, page: anonymous }) => {
+  const erik = await signedInPage(browser, ADMIN.email);
+  await erik.goto("/admin/photos");
+  await erik.getByLabel("Choose photos").setInputFiles([
+    { name: "one.jpg", mimeType: "image/jpeg", buffer: await jpeg() },
+    { name: "two.jpg", mimeType: "image/jpeg", buffer: await sharp({ create: { width: 1200, height: 800, channels: 3, background: "#224466" } }).jpeg().toBuffer() },
+  ]);
+  await expect(erik.getByText("Ready below")).toHaveCount(2, { timeout: 30_000 });
+  for (const [file, alt] of [["one.jpg", "Crowd singing along"], ["two.jpg", "Jake on bass"]] as const) {
+    const card = erik.getByRole("article", { name: file });
+    await card.getByLabel("Alt text (required)").fill(alt);
+    await card.getByRole("button", { name: "Save and publish" }).click();
+    await expect(erik.getByRole("article", { name: file })).toHaveCount(0);
+  }
+
+  await erik.getByRole("link", { name: "Albums" }).first().click();
+  await erik.getByLabel("Title").fill("Zoo Bar, October 2026");
+  await erik.getByLabel("Show date (optional)").fill("2026-10-17");
+  await erik.getByLabel("Show on the public Photos page").check();
+  await erik.getByRole("button", { name: "Create album" }).click();
+  await expect(erik.getByText("Album created. Add photos below.")).toBeVisible();
+
+  await erik.getByLabel("Crowd singing along").check();
+  await erik.getByLabel("Jake on bass").check();
+  await erik.getByRole("button", { name: "Add selected" }).click();
+  await expect(erik.getByRole("heading", { name: "Photos in this album (2)" })).toBeVisible();
+  // Added in picker order (newest first). Move the crowd shot first; the first photo is the default cover.
+  await expect(erik.getByText("1. Jake on bass")).toBeVisible();
+  await erik.getByRole("button", { name: "Move Crowd singing along earlier" }).click();
+  await expect(erik.getByText("1. Crowd singing along")).toBeVisible();
+  const coverOf = (alt: string) => erik.getByRole("listitem", { name: alt }).getByText("Cover", { exact: true });
+  await expect(coverOf("Crowd singing along")).toBeVisible();
+  await erik.getByRole("button", { name: "Make Jake on bass the cover" }).click();
+  await expect(coverOf("Jake on bass")).toBeVisible();
+  await expect(coverOf("Crowd singing along")).toHaveCount(0);
+
+  const csp = watchCsp(anonymous);
+  await anonymous.goto("/photos");
+  await anonymous.getByRole("link", { name: /Zoo Bar, October 2026/ }).click();
+  await expect(anonymous).toHaveURL(/\/photos\/albums\/zoo-bar-october-2026$/);
+  await expect(anonymous.getByRole("heading", { level: 1, name: "Zoo Bar, October 2026" })).toBeVisible();
+  await expect(anonymous.getByText("October 17, 2026", { exact: false })).toBeVisible();
+  const alts = await anonymous.getByRole("main").getByRole("img").evaluateAll((images) => images.map((image) => image.getAttribute("alt")));
+  expect(alts).toEqual(["Crowd singing along", "Jake on bass"]);
+  await expectImageLoaded(anonymous, "Jake on bass");
+  expect(csp).toEqual([]);
+
+  // Hiding the album takes it off the public site.
+  await erik.getByLabel("Show on the public Photos page").uncheck();
+  await erik.getByRole("button", { name: "Save album" }).click();
+  await expect(erik.getByText("Saved.")).toBeVisible();
+  const hidden = await anonymous.goto("/photos/albums/zoo-bar-october-2026");
+  expect(hidden?.status()).toBe(404);
+});

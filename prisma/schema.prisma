@@ -44,6 +44,7 @@ model User {
   photosUploaded           Photo[]             @relation("PhotoUploader")
   photosDecided            Photo[]             @relation("PhotoDecider")
   photoRemovalsRequested   Photo[]             @relation("PhotoRemovalRequester")
+  albumsCreated            Album[]
   /// NOT-5: booking alerts by email / phone push. Both on by default.
   bookingEmailAlerts       Boolean             @default(true)
   bookingPushAlerts        Boolean             @default(true)
@@ -561,6 +562,9 @@ model Photo {
   createdAt        DateTime    @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime    @updatedAt @db.Timestamptz(3)
 
+  albumItems       AlbumItem[]
+  coverOf          Album[]     @relation("AlbumCover")
+
   @@index([status, publishedAt(sort: Desc)])
   @@index([status, uploadExpiresAt])
   @@index([uploaderId, status])
@@ -575,4 +579,46 @@ model JobState {
   lastRunAt DateTime @db.Timestamptz(3)
 
   @@map("job_state")
+}
+
+// ---------------------------------------------------------------- albums
+
+/// A gallery of published photos, e.g. one show (requirements MED-5).
+model Album {
+  id           String      @id @default(uuid()) @db.Uuid
+  /// URL path, set once from the title so shared links never break.
+  slug         String      @unique
+  title        String
+  description  String      @default("")
+  /// Optional show/event date (calendar date, band time zone).
+  eventDate    DateTime?   @db.Date
+  /// Hidden albums are band-only while they're being put together.
+  isPublic     Boolean     @default(false)
+  /// Must be one of the album's photos; falls back to the first public photo when unset or not public.
+  coverPhotoId String?     @db.Uuid
+  coverPhoto   Photo?      @relation("AlbumCover", fields: [coverPhotoId], references: [id], onDelete: SetNull)
+  createdById  String
+  createdBy    User        @relation(fields: [createdById], references: [id])
+  version      Int         @default(1)
+  createdAt    DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime    @updatedAt @db.Timestamptz(3)
+  items        AlbumItem[]
+
+  @@index([isPublic, eventDate(sort: Desc)])
+  @@map("album")
+}
+
+model AlbumItem {
+  albumId   String   @db.Uuid
+  album     Album    @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  /// Deleting a photo for good removes it from every album.
+  photoId   String   @db.Uuid
+  photo     Photo    @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  sortOrder Int
+  addedAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  @@id([albumId, photoId])
+  @@index([albumId, sortOrder])
+  @@index([photoId])
+  @@map("album_item")
 }

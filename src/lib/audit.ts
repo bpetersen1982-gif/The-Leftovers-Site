@@ -36,11 +36,15 @@ export const AUDIT_ACTION_LABELS = {
   "photo.remove": "Took photo off the site",
   "photo.restore": "Put photo back on the site",
   "photo.purge": "Permanently deleted photo",
+  "album.create": "Created album",
+  "album.update": "Edited album",
+  "album.delete": "Deleted album",
+  "album.photos": "Changed album photos",
 } as const;
 
 export type AuditAction = keyof typeof AUDIT_ACTION_LABELS;
 
-export type AuditTargetType = "user" | "invite" | "page" | "bandMember" | "siteSettings" | "availabilityBlock" | "pricing" | "specialDate" | "bookingRequest" | "photo";
+export type AuditTargetType = "user" | "invite" | "page" | "bandMember" | "siteSettings" | "availabilityBlock" | "pricing" | "specialDate" | "bookingRequest" | "photo" | "album";
 
 export interface AuditActor {
   readonly id: string;

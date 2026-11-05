@@ -37,6 +37,7 @@ export const PERMISSIONS = {
   "photos:requestRemoval": ["ADMIN", "MEMBER"],
   /** Permanently delete or restore a removed photo (APR-7, step 2). */
   "photos:delete": ["ADMIN"],
+  "albums:manage": ["ADMIN"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

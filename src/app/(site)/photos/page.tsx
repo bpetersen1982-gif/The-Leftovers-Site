@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { PhotoImg } from "@/components/photo-img";
 import { db } from "@/lib/db";
+import { formatLongDate } from "@/lib/dates";
+import { listPublicAlbums } from "@/lib/photos/album-queries";
 import { listPublicPhotos } from "@/lib/photos/queries";
 import { objectStorage } from "@/lib/storage";
 
@@ -20,11 +22,44 @@ export default async function PhotosPage({ searchParams }: { searchParams: Promi
   const { page: rawPage } = await searchParams;
   const page = parsePage(rawPage);
   const storage = objectStorage();
-  const gallery = storage ? await listPublicPhotos(db(), storage, page) : { photos: [], total: 0, pageCount: 1 };
+  const [gallery, albums] = storage
+    ? await Promise.all([listPublicPhotos(db(), storage, page), page === 1 ? listPublicAlbums(db(), storage) : []])
+    : [{ photos: [], total: 0, pageCount: 1 }, []];
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-12">
       <h1 className="font-heading text-4xl font-bold tracking-wider uppercase">Photos</h1>
+      {albums.length > 0 && (
+        <section aria-labelledby="albums-heading" className="mt-8">
+          <h2 id="albums-heading" className="font-heading text-2xl font-bold tracking-wider uppercase">
+            Albums
+          </h2>
+          <ul className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+            {albums.map((album) => (
+              <li key={album.id}>
+                <Link href={`/photos/albums/${album.slug}`} className="group block focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cream">
+                  {album.cover && (
+                    <PhotoImg
+                      image={album.cover.image}
+                      alt=""
+                      sizes="(min-width: 768px) 25vw, 50vw"
+                      className="aspect-[4/3] w-full bg-charcoal object-cover"
+                    />
+                  )}
+                  <span className="mt-2 block font-heading font-semibold tracking-wide uppercase group-hover:underline">{album.title}</span>
+                  <span className="block text-sm text-cream/90">
+                    {album.eventDate ? `${formatLongDate(album.eventDate)} · ` : ""}
+                    {album.publicPhotoCount} photo{album.publicPhotoCount === 1 ? "" : "s"}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      {albums.length > 0 && gallery.photos.length > 0 && (
+        <h2 className="mt-12 font-heading text-2xl font-bold tracking-wider uppercase">All photos</h2>
+      )}
       {gallery.photos.length === 0 ? (
         <p className="mt-6">{page > 1 ? "No photos on this page." : "Photos from our shows are coming soon."}</p>
       ) : (
