@@ -15,7 +15,7 @@ so a move means updating the variables listed here.
 | Cloudflare: DNS | All DNS records; apex and `www` point to Railway (DNS only, not proxied) | Same | Free |
 | Cloudflare: Email Routing | Forwards `booking@`, `hello@`, `copyright@` (one destination each) | Same | Free |
 | Cloudflare: R2 | Photos. `leftovers-media-private` (uploads, unapproved), `leftovers-media-public` (approved only, served at `media.theleftoversband.com`) | Same | Free under 10 GB |
-| Cloudflare: Stream | Video (Wave 3c) | Same | $5/mo + usage |
+| Cloudflare: Stream | Video. Webhook → `https://theleftoversband.com/api/stream/webhook` | Same | $5 per 1,000 stored minutes + $1 per 1,000 minutes watched |
 | Resend | Outgoing email from `mail.theleftoversband.com` (DKIM/SPF in Cloudflare DNS) | Brandon's Resend account | Free tier |
 
 Not set up yet: Sentry (OPS-5), uptime checks (OPS-6), billing alerts (OPS-7), DMCA designated agent (LEG-2).
@@ -33,6 +33,9 @@ updating it in Railway, which redeploys automatically.
 | `RESEND_API_KEY` | Yes | Resend → API Keys |
 | `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Yes | Cloudflare → R2 → API tokens (scoped to the two buckets) |
 | `CF_STREAM_API_TOKEN` | Yes | Cloudflare → API Tokens (Stream: Edit) |
+| `CF_STREAM_WEBHOOK_SECRET` | Yes | Printed by `scripts/stream-webhook.ts` (see the script). Re-running it replaces the secret. |
+| `CF_ACCOUNT_ID` | No | Cloudflare account ID (same as `R2_ACCOUNT_ID`) |
+| `VIDEO_MAX_BYTES`, `VIDEO_MAX_DURATION_SECONDS` | No | Optional video limits (defaults 5 GB, 1 hour) |
 | `VAPID_PRIVATE_KEY` | Yes | Generated with `web-push`. Changing it breaks existing phone alert subscriptions. |
 | `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT` | No | Pair of the private key; contact address |
 | `R2_ACCOUNT_ID` | No | Cloudflare account ID |

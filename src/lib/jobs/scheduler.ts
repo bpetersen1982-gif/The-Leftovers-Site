@@ -3,6 +3,8 @@ import { logger } from "../logger";
 import { objectStorage } from "../storage";
 import { runBookingJobs } from "./booking-jobs";
 import { runPhotoJobs } from "./photo-jobs";
+import { runVideoJobs } from "./video-jobs";
+import { videoDeps } from "../video/deps";
 
 /**
  * In-process scheduler. One small job every 10 minutes doesn't justify a separate worker
@@ -25,6 +27,12 @@ async function tick(): Promise<void> {
     await runPhotoJobs(db(), objectStorage());
   } catch (error) {
     logger.error({ err: error }, "photo jobs failed");
+  }
+  try {
+    const deps = videoDeps();
+    if (deps) await runVideoJobs(deps);
+  } catch (error) {
+    logger.error({ err: error }, "video jobs failed");
   }
 }
 

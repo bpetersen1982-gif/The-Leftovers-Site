@@ -47,6 +47,8 @@ model User {
   albumsCreated            Album[]
   takedownsActed           TakedownNotice[]    @relation("TakedownActor")
   takedownsResolved        TakedownNotice[]    @relation("TakedownResolver")
+  videosUploaded           Video[]             @relation("VideoUploader")
+  videoRemovalsRequested   Video[]             @relation("VideoRemovalRequester")
   /// NOT-5: booking alerts by email / phone push. Both on by default.
   bookingEmailAlerts       Boolean             @default(true)
   bookingPushAlerts        Boolean             @default(true)
@@ -665,4 +667,64 @@ model TakedownNotice {
   @@index([mediaKind, mediaId])
   @@index([createdAt(sort: Desc)])
   @@map("takedown_notice")
+}
+
+// ---------------------------------------------------------------- video (Cloudflare Stream)
+
+/// Lifecycle of a video (requirements MED-6..MED-10, APR-7, LEG-3). Only PUBLISHED is public.
+enum VideoStatus {
+  /// Upload URL issued; the browser is sending the file to Stream (resumable).
+  UPLOADING
+  /// Stream has the file and is encoding it.
+  PROCESSING
+  /// Encoded and private; an Admin adds a title etc. and publishes.
+  READY
+  PUBLISHED
+  /// Was public; taken off the site (APR-7). An Admin deletes it or puts it back.
+  DELETION_REQUESTED
+  /// Unpublished after a copyright notice (LEG-3).
+  TAKEN_DOWN
+  /// Stream couldn't use the file (not a video, corrupt, too long).
+  FAILED
+}
+
+model Video {
+  id                     String      @id @default(uuid()) @db.Uuid
+  /// Cloudflare Stream video id.
+  streamUid              String      @unique
+  status                 VideoStatus @default(UPLOADING)
+  uploaderId             String
+  uploader               User        @relation("VideoUploader", fields: [uploaderId], references: [id])
+  /// Display only (sanitized).
+  originalFilename       String
+  sizeBytes              BigInt
+  uploadExpiresAt        DateTime    @db.Timestamptz(3)
+  durationSeconds        Float?
+  width                  Int?
+  height                 Int?
+  /// "https://customer-<code>.cloudflarestream.com", learned from Stream once processed.
+  playbackOrigin         String?
+  failureReason          String?
+  /// Whether Stream currently allows unsigned playback. True only while PUBLISHED;
+  /// the video job re-locks any video where this drifted (e.g. a failed API call).
+  streamPublic           Boolean     @default(false)
+  title                  String      @default("")
+  description            String      @default("")
+  /// Poster frame (MED-8): seconds into the video.
+  posterSeconds          Float       @default(0)
+  /// Language of uploaded WebVTT captions, if any (MED-8, A11Y-3).
+  captionsLanguage       String?
+  publishedAt            DateTime?   @db.Timestamptz(3)
+  removalRequestedAt     DateTime?   @db.Timestamptz(3)
+  removalRequestedById   String?
+  removalRequestedBy     User?       @relation("VideoRemovalRequester", fields: [removalRequestedById], references: [id])
+  removalRequestedByRole Role?
+  removalReason          String?
+  version                Int         @default(1)
+  createdAt              DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime    @updatedAt @db.Timestamptz(3)
+
+  @@index([status, publishedAt(sort: Desc)])
+  @@index([status, updatedAt])
+  @@map("video")
 }

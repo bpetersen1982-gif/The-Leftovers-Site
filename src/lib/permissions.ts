@@ -40,6 +40,10 @@ export const PERMISSIONS = {
   "albums:manage": ["ADMIN"],
   /** Copyright takedown after reviewing an emailed notice (LEG-3). */
   "media:takedown": ["ADMIN"],
+  /** Requirements §2.2: Members can't add videos; they can see the band's list and ask to remove. */
+  "videos:view": ["ADMIN", "MEMBER"],
+  "videos:manage": ["ADMIN"],
+  "videos:requestRemoval": ["ADMIN", "MEMBER"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

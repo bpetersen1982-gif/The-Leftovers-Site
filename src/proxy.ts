@@ -21,6 +21,10 @@ function photoOrigins(): StorageCspOrigins {
   return storageOrigins;
 }
 
+/** Cloudflare Stream: player iframes and thumbnails, and resumable (tus) uploads. */
+const STREAM_PLAYBACK = "https://*.cloudflarestream.com";
+const STREAM_UPLOADS = ["https://upload.cloudflarestream.com", "https://upload.videodelivery.net"];
+
 function withOrigins(base: string, origins: readonly string[]): string {
   return [base, ...origins].join(" ");
 }
@@ -33,10 +37,11 @@ function buildCsp(nonce: string, isDev: boolean): string {
     `style-src 'self' 'nonce-${nonce}'`,
     // style="" attributes (used by React/next/image) can't run script; <style> tags still need the nonce.
     "style-src-attr 'unsafe-inline'",
-    withOrigins("img-src 'self' blob: data:", photos.img),
+    withOrigins("img-src 'self' blob: data:", [...photos.img, STREAM_PLAYBACK]),
+    `frame-src ${STREAM_PLAYBACK}`,
     "font-src 'self'",
     // Browsers upload photos straight to storage with a signed URL.
-    withOrigins("connect-src 'self'", photos.connect),
+    withOrigins("connect-src 'self'", [...photos.connect, ...STREAM_UPLOADS]),
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

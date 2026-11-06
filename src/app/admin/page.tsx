@@ -79,13 +79,19 @@ export default async function AdminHomePage() {
             : upload photos from shows{isAdmin ? " and approve band members' uploads" : " (an Admin approves them)"}.
           </li>
           <li>
+            <Link href="/admin/videos" className="underline">
+              Videos
+            </Link>
+            : {isAdmin ? "upload and publish show clips" : "see the band's videos"}.
+          </li>
+          <li>
             <Link href="/admin/account" className="underline">
               My account
             </Link>
             : manage your passkeys.
           </li>
         </ul>
-        <p className="mt-4 text-cream/90">Albums and video are next, then the fan wall.</p>
+        <p className="mt-4 text-cream/90">The fan wall, mailing list, and press kit are next.</p>
       </section>
     </div>
   );

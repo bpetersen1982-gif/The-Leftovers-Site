@@ -19,6 +19,18 @@ const nextConfig: NextConfig = {
   experimental: {
     authInterrupts: true,
   },
+  // One public address (SEO-1): www.theleftoversband.com permanently redirects to the apex,
+  // keeping the path and query string.
+  async redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "www.theleftoversband.com" }],
+        destination: "https://theleftoversband.com/:path*",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

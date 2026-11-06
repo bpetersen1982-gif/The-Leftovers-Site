@@ -77,6 +77,15 @@ export async function listPublicAlbums(prisma: PrismaClient, storage: ObjectStor
   return rows.map((row) => toSummary(storage, row));
 }
 
+/** Slugs of albums the public can see (for the sitemap). */
+export async function listPublicAlbumPaths(prisma: PrismaClient): Promise<{ slug: string; updatedAt: Date }[]> {
+  return prisma.album.findMany({
+    where: { isPublic: true, items: { some: { photo: { status: "APPROVED" } } } },
+    orderBy: { createdAt: "asc" },
+    select: { slug: true, updatedAt: true },
+  });
+}
+
 /** Every album, for the band's albums page. */
 export async function listBandAlbums(prisma: PrismaClient, storage: ObjectStorage): Promise<(AlbumSummary & { totalPhotoCount: number })[]> {
   const rows = await prisma.album.findMany({

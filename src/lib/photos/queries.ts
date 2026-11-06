@@ -164,6 +164,19 @@ function toNotice(row: NoticeRow): TakedownSummary {
   };
 }
 
+/** Latest open notice per item, for taken-down photos or videos. */
+export async function openNoticesFor(prisma: PrismaClient, mediaKind: "PHOTO" | "VIDEO", ids: readonly string[]): Promise<Map<string, TakedownSummary>> {
+  const result = new Map<string, TakedownSummary>();
+  if (ids.length === 0) return result;
+  const rows = await prisma.takedownNotice.findMany({
+    where: { mediaKind, mediaId: { in: [...ids] }, resolution: null },
+    orderBy: { createdAt: "desc" },
+    select: NOTICE_SELECT,
+  });
+  for (const row of rows) if (!result.has(row.mediaId)) result.set(row.mediaId, toNotice(row));
+  return result;
+}
+
 /** Every notice acted on, newest first (the permanent record, LEG-3). */
 export async function listTakedownNotices(prisma: PrismaClient, limit = 50): Promise<TakedownSummary[]> {
   const rows = await prisma.takedownNotice.findMany({ orderBy: { createdAt: "desc" }, take: limit, select: NOTICE_SELECT });
@@ -230,15 +243,7 @@ export async function getBandPhotoBoard(
       ? prisma.photo.findMany({ where: { status: "TAKEN_DOWN" }, orderBy: { updatedAt: "desc" }, select: BAND_SELECT })
       : Promise.resolve([]),
   ]);
-  const openNotices = takenDown.length
-    ? await prisma.takedownNotice.findMany({
-        where: { mediaKind: "PHOTO", mediaId: { in: takenDown.map((row) => row.id) }, resolution: null },
-        orderBy: { createdAt: "desc" },
-        select: NOTICE_SELECT,
-      })
-    : [];
-  const noticeFor = new Map<string, TakedownSummary>();
-  for (const row of openNotices) if (!noticeFor.has(row.mediaId)) noticeFor.set(row.mediaId, toNotice(row));
+  const noticeFor = await openNoticesFor(prisma, "PHOTO", takenDown.map((row) => row.id));
 
   type Row = (typeof mine)[number];
   const toBand = async (row: Row): Promise<BandPhoto> => ({
