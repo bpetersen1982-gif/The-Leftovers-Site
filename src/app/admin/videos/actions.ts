@@ -109,7 +109,8 @@ export async function saveVideoAction(_previous: ActionState, formData: FormData
     if (formData.get("intent") === "publish") {
       await publishVideo(wired, actor, { id: String(formData.get("id")), version }, requestId);
       refresh();
-      return { ok: true, message: "Published." };
+      // Stream takes up to ~30s to make a video playable after it goes public (measured).
+      return { ok: true, message: "Published. It can take up to a minute before it starts playing." };
     }
     refresh();
     return { ok: true, message: "Saved." };
@@ -156,7 +157,7 @@ export async function videoDecisionAction(_previous: ActionState, formData: Form
       message = result.lockedOnStream ? "Taken off the site." : "Taken off the site. Stream didn't respond, so its old link will be locked on the next retry (within 10 minutes).";
     } else if (intent.data === "restore") {
       await restoreVideo(wired, actor, ref.data, requestId);
-      message = "Back on the site.";
+      message = "Back on the site. It can take up to a minute before it plays again.";
     } else {
       const result = await deleteVideo(wired, actor, ref.data, requestId);
       message = result.deletedOnStream ? "Deleted." : "Deleted here, but Stream didn't confirm. It's been logged so it can be removed by hand.";
