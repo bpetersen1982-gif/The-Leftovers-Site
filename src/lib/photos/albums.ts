@@ -19,7 +19,7 @@ export const MAX_ALBUM_PHOTOS = 500;
 const MAX_ADD_AT_ONCE = 100;
 const MAX_SLUG = 60;
 
-export type AlbumErrorCode = "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "NOT_IN_ALBUM" | "NOTHING_TO_ADD" | "TOO_MANY_PHOTOS";
+export type AlbumErrorCode = "FORBIDDEN" | "NOT_FOUND" | "CONFLICT" | "NOT_IN_ALBUM" | "NOTHING_TO_ADD" | "TOO_MANY_PHOTOS" | "SHOW_NOT_FOUND";
 
 const MESSAGES: Record<AlbumErrorCode, string> = {
   FORBIDDEN: "Only Admins can manage albums.",
@@ -28,6 +28,7 @@ const MESSAGES: Record<AlbumErrorCode, string> = {
   NOT_IN_ALBUM: "That photo isn't in this album anymore. Reload and try again.",
   NOTHING_TO_ADD: "Pick at least one published photo that isn't already in the album.",
   TOO_MANY_PHOTOS: `An album can hold up to ${MAX_ALBUM_PHOTOS} photos.`,
+  SHOW_NOT_FOUND: "That show no longer exists. Pick another.",
 };
 
 export class AlbumError extends Error {
@@ -57,8 +58,18 @@ export const albumInputSchema = z.strictObject({
     .refine((value) => value === "" || isIsoDate(value), "Use a real date (YYYY-MM-DD).")
     .transform((value) => value || null),
   isPublic: z.boolean(),
+  /** Optional show this album is from; "" = none. */
+  showId: z
+    .union([z.literal(""), z.uuid()])
+    .optional()
+    .transform((value) => value || null),
 });
 export type AlbumInput = z.input<typeof albumInputSchema>;
+
+/** Unknown show ids are rejected up front instead of failing on the foreign key. */
+async function assertShowExists(tx: Tx | PrismaClient, showId: string | null): Promise<void> {
+  if (showId && !(await tx.show.findUnique({ where: { id: showId }, select: { id: true } }))) throw new AlbumError("SHOW_NOT_FOUND");
+}
 
 export const albumRefSchema = z.strictObject({ id: z.uuid(), version: z.coerce.number().int().min(1) });
 export type AlbumRef = z.infer<typeof albumRefSchema>;
@@ -126,6 +137,7 @@ interface Meta {
 export async function createAlbum(prisma: PrismaClient, actor: AuditActor, input: AlbumInput, meta: Meta = {}): Promise<{ id: string; slug: string }> {
   assertCanManage(actor);
   const album = albumInputSchema.parse(input);
+  await assertShowExists(prisma, album.showId);
   const base = slugify(album.title);
   // Unique slug: "zoo-bar", then "zoo-bar-2", ... Retries if another Admin takes it first.
   for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -143,6 +155,7 @@ export async function createAlbum(prisma: PrismaClient, actor: AuditActor, input
             description: album.description,
             eventDate: album.eventDate ? toDbDate(album.eventDate) : null,
             isPublic: album.isPublic,
+            showId: album.showId,
             createdById: actor.id,
           },
         });
@@ -163,12 +176,14 @@ export async function updateAlbum(prisma: PrismaClient, actor: AuditActor, ref: 
   const album = albumInputSchema.parse(input);
   return prisma.$transaction(async (tx) => {
     await lockAlbum(tx, parsedRef);
+    await assertShowExists(tx, album.showId);
     const before = await tx.album.findUniqueOrThrow({ where: { id: parsedRef.id }, select: { title: true, isPublic: true } });
     const version = await bumpVersion(tx, parsedRef.id, {
       title: album.title,
       description: album.description,
       eventDate: album.eventDate ? toDbDate(album.eventDate) : null,
       isPublic: album.isPublic,
+      showId: album.showId,
     });
     await writeAudit(tx, {
       actor,

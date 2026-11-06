@@ -195,10 +195,11 @@ export async function updateVideoDetails(deps: VideoDeps, actor: AuditActor, inp
   if (video.status === "FAILED" || video.status === "UPLOADING") throw new VideoError("INVALID_STATE");
   if (video.status === "PUBLISHED" && details.title === "") throw new VideoError("TITLE_REQUIRED");
   if (video.durationSeconds !== null && details.posterSeconds > video.durationSeconds) throw new VideoError("POSTER_PAST_END");
+  if (details.showId && !(await deps.prisma.show.findUnique({ where: { id: details.showId }, select: { id: true } }))) throw new VideoError("SHOW_NOT_FOUND");
   return deps.prisma.$transaction(async (tx) => {
     const updated = await tx.video.updateMany({
       where: { id: video.id, version: video.version },
-      data: { title: details.title, description: details.description, posterSeconds: details.posterSeconds, version: { increment: 1 } },
+      data: { title: details.title, description: details.description, posterSeconds: details.posterSeconds, showId: details.showId, version: { increment: 1 } },
     });
     if (updated.count !== 1) throw new VideoError("CONFLICT");
     await writeAudit(tx, { actor, action: "video.update", targetType: "video", targetId: video.id, before: { title: video.title }, after: { title: details.title }, requestId });

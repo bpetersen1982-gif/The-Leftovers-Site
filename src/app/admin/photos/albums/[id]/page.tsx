@@ -3,7 +3,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 import { requirePermission } from "@/lib/auth/session";
+import { todayInBandTimeZone } from "@/lib/dates";
 import { db } from "@/lib/db";
+import { showOptions } from "@/lib/shows/queries";
 import { type AlbumPhoto, getBandAlbum } from "@/lib/photos/album-queries";
 import { objectStorage } from "@/lib/storage";
 import { AddPhotosForm, AlbumPhotoList, type AlbumPhotoCard, DeleteAlbumForm, EditAlbumForm } from "../album-forms";
@@ -28,7 +30,7 @@ export default async function AdminAlbumPage({
   const id = z.uuid().safeParse(rawId);
   const storage = objectStorage();
   if (!id.success || !storage) notFound();
-  const album = await getBandAlbum(db(), storage, id.data);
+  const [album, shows] = await Promise.all([getBandAlbum(db(), storage, id.data), showOptions(db(), todayInBandTimeZone())]);
   if (!album) notFound();
   const noticeText = notice ? NOTICES[notice] : undefined;
   const publicCount = album.photos.filter((photo) => photo.status === "APPROVED").length;
@@ -61,7 +63,8 @@ export default async function AdminAlbumPage({
         <EditAlbumForm
           albumId={album.id}
           version={album.version}
-          details={{ title: album.title, description: album.description, eventDate: album.eventDate, isPublic: album.isPublic }}
+          details={{ title: album.title, description: album.description, eventDate: album.eventDate, isPublic: album.isPublic, showId: album.showId }}
+          shows={shows}
         />
       </section>
 

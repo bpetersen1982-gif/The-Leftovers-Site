@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { listPublicAlbumPaths } from "@/lib/photos/album-queries";
 
 const SITE_URL = "https://theleftoversband.com";
-const STATIC_PATHS = ["", "/book", "/about", "/members", "/photos", "/videos", "/songs", "/contact", "/privacy", "/copyright"] as const;
+const STATIC_PATHS = ["", "/book", "/shows", "/about", "/members", "/photos", "/videos", "/songs", "/contact", "/privacy", "/copyright"] as const;
 
 /**
  * Public pages only; admin, login, and invite routes are excluded (SEC-7). Built per
@@ -12,12 +12,21 @@ const STATIC_PATHS = ["", "/book", "/about", "/members", "/photos", "/videos", "
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   await connection();
-  const albums = await listPublicAlbumPaths(db());
+  const [albums, shows] = await Promise.all([
+    listPublicAlbumPaths(db()),
+    db().show.findMany({ where: { isPublic: true }, orderBy: { date: "desc" }, take: 500, select: { slug: true, updatedAt: true } }),
+  ]);
   return [
     ...STATIC_PATHS.map((path) => ({
       url: `${SITE_URL}${path}`,
       changeFrequency: path === "" ? ("weekly" as const) : ("monthly" as const),
       priority: path === "" ? 1 : 0.6,
+    })),
+    ...shows.map((show) => ({
+      url: `${SITE_URL}/shows/${show.slug}`,
+      lastModified: show.updatedAt,
+      changeFrequency: "monthly" as const,
+      priority: 0.5,
     })),
     ...albums.map((album) => ({
       url: `${SITE_URL}/photos/albums/${album.slug}`,

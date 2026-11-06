@@ -22,6 +22,7 @@ export interface CardVideo {
   readonly durationSeconds: number | null;
   readonly duration: string | null;
   readonly captionsLanguage: string | null;
+  readonly showId: string | null;
   readonly failureReason: string | null;
   readonly uploaderName: string;
   readonly removalRequestedByName: string | null;
@@ -34,7 +35,12 @@ function Preview({ video }: { video: CardVideo }) {
   return <VideoPlayer title={video.title || video.originalFilename} posterUrl={video.playback.posterUrl} iframeUrl={video.playback.iframeUrl} />;
 }
 
-export function DetailsForm({ video, canPublish }: { video: CardVideo; canPublish: boolean }) {
+export interface ShowOption {
+  readonly id: string;
+  readonly label: string;
+}
+
+export function DetailsForm({ video, canPublish, shows }: { video: CardVideo; canPublish: boolean; shows: readonly ShowOption[] }) {
   const [state, onSubmit, pending] = useActionForm(saveVideoAction, INITIAL_ACTION_STATE);
   const prefix = useId();
   const errors = state.fieldErrors;
@@ -78,6 +84,22 @@ export function DetailsForm({ video, canPublish }: { video: CardVideo; canPublis
         />
         <FieldError id={`${prefix}-posterSeconds-error`} message={errors?.posterSeconds} />
       </div>
+      {shows.length > 0 && (
+        <div>
+          <label htmlFor={`${prefix}-showId`} className={LABEL_CLASS}>
+            From a show (optional)
+          </label>
+          <select {...described("showId")} defaultValue={video.showId ?? ""}>
+            <option value="">Not linked to a show</option>
+            {shows.map((show) => (
+              <option key={show.id} value={show.id}>
+                {show.label}
+              </option>
+            ))}
+          </select>
+          <FieldError id={`${prefix}-showId-error`} message={errors?.showId} />
+        </div>
+      )}
       <div className="flex flex-wrap gap-2">
         <button type="submit" name="intent" value="save" disabled={pending} className={SECONDARY_BUTTON}>
           Save
@@ -198,21 +220,21 @@ export function InProgressCard({ video }: { video: CardVideo }) {
   );
 }
 
-export function ReadyCard({ video }: { video: CardVideo }) {
+export function ReadyCard({ video, shows }: { video: CardVideo; shows: readonly ShowOption[] }) {
   return (
     <article className="space-y-3 border border-olive/60 p-3" aria-label={video.originalFilename}>
       <Preview video={video} />
       <p className="truncate text-sm" title={video.originalFilename}>
         {video.originalFilename} {video.duration ? `· ${video.duration}` : ""}
       </p>
-      <DetailsForm video={video} canPublish />
+      <DetailsForm video={video} canPublish shows={shows} />
       <CaptionsForm video={video} />
       <DecisionButton video={video} intent="delete" label="Delete" confirmText={DELETE_CONFIRM} />
     </article>
   );
 }
 
-export function PublishedCard({ video, isAdmin, today }: { video: CardVideo; isAdmin: boolean; today: string }) {
+export function PublishedCard({ video, isAdmin, today, shows }: { video: CardVideo; isAdmin: boolean; today: string; shows: readonly ShowOption[] }) {
   return (
     <article className="space-y-3 border border-olive/60 p-3" aria-label={video.title}>
       <Preview video={video} />
@@ -222,7 +244,7 @@ export function PublishedCard({ video, isAdmin, today }: { video: CardVideo; isA
           <details>
             <summary className="cursor-pointer text-sm underline">Edit details</summary>
             <div className="mt-3">
-              <DetailsForm video={video} canPublish={false} />
+              <DetailsForm video={video} canPublish={false} shows={shows} />
             </div>
           </details>
           <CaptionsForm video={video} />

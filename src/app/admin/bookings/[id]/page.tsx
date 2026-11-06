@@ -10,6 +10,7 @@ import { DECLINE_TEMPLATE } from "@/lib/booking/prospect-emails";
 import { formatLongDate, todayInBandTimeZone } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { can } from "@/lib/permissions";
+import { ShowFromBookingButton } from "../../shows/show-forms";
 import { CancelPanel, ConfirmPanel, DeclinePanel, HoldPanel, NotePanel, QuotePanel, ReplyPanel } from "./panels";
 
 export const metadata: Metadata = { title: "Booking request" };
@@ -45,6 +46,7 @@ export default async function BookingDetailPage({
 
   const today = todayInBandTimeZone();
   const isAdmin = can(viewer.role, "booking:manage");
+  const linkedShow = isAdmin ? await db().show.findUnique({ where: { bookingRequestId: request.id }, select: { id: true, isPublic: true } }) : null;
   const canReply = can(viewer.role, "booking:reply") && request.status !== "IN_PROGRESS";
   const ids = { requestId: request.id, version: request.version };
   const confirmable = ["ACCEPTED", "AWAITING_CONTACT", "CONTACTED", "QUOTED", "CONFIRMED"].includes(request.status);
@@ -187,6 +189,23 @@ export default async function BookingDetailPage({
         <NotePanel requestId={request.id} />
         {isAdmin && declinable && (
           <DeclinePanel ids={ids} template={DECLINE_TEMPLATE(request.eventDate ? formatLongDate(request.eventDate) : "your event")} />
+        )}
+        {isAdmin && request.status === "CONFIRMED" && request.eventDate && (
+          <section aria-labelledby="as-show" className="space-y-2 border border-olive/60 p-4">
+            <h2 id="as-show" className="font-heading text-xl font-bold tracking-wider uppercase">
+              Show listing
+            </h2>
+            {linkedShow ? (
+              <p>
+                Listed as a {linkedShow.isPublic ? "public" : "private"} show.{" "}
+                <Link href={`/admin/shows/${linkedShow.id}`} className="underline">
+                  Edit the show
+                </Link>
+              </p>
+            ) : (
+              <ShowFromBookingButton bookingId={request.id} />
+            )}
+          </section>
         )}
         {isAdmin && request.status === "CONFIRMED" && <CancelPanel ids={ids} />}
         {!isAdmin && <p className="text-sm text-cream/90">Only Admins can quote, confirm, or decline. Add a note or log your call so they know.</p>}

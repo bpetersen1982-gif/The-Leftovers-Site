@@ -41,6 +41,11 @@ export const videoDetailsSchema = videoRefSchema.extend({
     .transform((value) => value.replace(/\r\n?/g, "\n").trim())
     .pipe(z.string().max(MAX_VIDEO_DESCRIPTION, `Description must be ${MAX_VIDEO_DESCRIPTION} characters or fewer`)),
   posterSeconds: z.coerce.number().min(0, "Pick a time from 0 seconds up.").max(6 * 3600),
+  /** Optional show this video is from; "" = none. */
+  showId: z
+    .union([z.literal(""), z.uuid()])
+    .optional()
+    .transform((value) => value || null),
 });
 export type VideoDetailsInput = z.input<typeof videoDetailsSchema>;
 

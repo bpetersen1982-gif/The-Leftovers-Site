@@ -7,7 +7,8 @@ export type VideoErrorCode =
   | "POSTER_PAST_END"
   | "TOO_MANY_UPLOADS"
   | "VIDEO_DISABLED"
-  | "STREAM_UNAVAILABLE";
+  | "STREAM_UNAVAILABLE"
+  | "SHOW_NOT_FOUND";
 
 const MESSAGES: Record<VideoErrorCode, string> = {
   FORBIDDEN: "You don't have permission to do that.",
@@ -19,6 +20,7 @@ const MESSAGES: Record<VideoErrorCode, string> = {
   TOO_MANY_UPLOADS: "Let the current uploads finish before adding more.",
   VIDEO_DISABLED: "Video isn't set up on this site yet.",
   STREAM_UNAVAILABLE: "Cloudflare Stream didn't respond. Nothing was changed; try again in a minute.",
+  SHOW_NOT_FOUND: "That show no longer exists. Pick another.",
 };
 
 /** Expected, user-facing failures in video operations. */

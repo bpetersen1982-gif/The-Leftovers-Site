@@ -37,6 +37,9 @@ export const AUDIT_ACTION_LABELS = {
   "photo.restore": "Put photo back on the site",
   "photo.purge": "Permanently deleted photo",
   "media.takedown": "Took down after a copyright notice",
+  "show.create": "Added show",
+  "show.update": "Edited show",
+  "show.delete": "Deleted show",
   "song.create": "Added song",
   "song.update": "Edited song",
   "song.delete": "Deleted song",
@@ -56,7 +59,7 @@ export const AUDIT_ACTION_LABELS = {
 
 export type AuditAction = keyof typeof AUDIT_ACTION_LABELS;
 
-export type AuditTargetType = "user" | "invite" | "page" | "bandMember" | "siteSettings" | "availabilityBlock" | "pricing" | "specialDate" | "bookingRequest" | "photo" | "album" | "video" | "song";
+export type AuditTargetType = "user" | "invite" | "page" | "bandMember" | "siteSettings" | "availabilityBlock" | "pricing" | "specialDate" | "bookingRequest" | "photo" | "album" | "video" | "song" | "show";
 
 export interface AuditActor {
   readonly id: string;

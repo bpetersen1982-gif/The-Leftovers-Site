@@ -36,6 +36,7 @@ function detailsFrom(formData: FormData): AlbumInput {
     description: String(formData.get("description") ?? ""),
     eventDate: String(formData.get("eventDate") ?? ""),
     isPublic: formData.get("isPublic") === "on",
+    showId: String(formData.get("showId") ?? ""),
   };
 }
 

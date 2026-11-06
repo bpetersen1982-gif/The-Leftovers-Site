@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requirePermission } from "@/lib/auth/session";
-import { formatLongDate } from "@/lib/dates";
+import { formatLongDate, todayInBandTimeZone } from "@/lib/dates";
+import { showOptions } from "@/lib/shows/queries";
 import { db } from "@/lib/db";
 import { listBandAlbums } from "@/lib/photos/album-queries";
 import { objectStorage } from "@/lib/storage";
@@ -15,7 +16,7 @@ export default async function AdminAlbumsPage({ searchParams }: { searchParams: 
   await requirePermission("albums:manage");
   const { notice } = await searchParams;
   const storage = objectStorage();
-  const albums = storage ? await listBandAlbums(db(), storage) : [];
+  const [albums, shows] = await Promise.all([storage ? listBandAlbums(db(), storage) : [], showOptions(db(), todayInBandTimeZone())]);
   const noticeText = notice ? NOTICES[notice] : undefined;
 
   return (
@@ -64,7 +65,7 @@ export default async function AdminAlbumsPage({ searchParams }: { searchParams: 
         <h2 id="new-album" className="font-heading text-xl font-bold tracking-wider uppercase">
           New album
         </h2>
-        <CreateAlbumForm />
+        <CreateAlbumForm shows={shows} />
       </section>
     </div>
   );

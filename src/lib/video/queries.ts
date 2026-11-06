@@ -117,6 +117,7 @@ export interface BandVideo {
   readonly durationSeconds: number | null;
   readonly duration: string | null;
   readonly captionsLanguage: string | null;
+  readonly showId: string | null;
   readonly failureReason: string | null;
   readonly uploaderName: string;
   readonly removalRequestedByName: string | null;
@@ -139,6 +140,7 @@ export interface BandVideoBoard {
 
 const BAND_SELECT = {
   ...PUBLIC_SELECT,
+  showId: true,
   version: true,
   status: true,
   originalFilename: true,
@@ -181,6 +183,7 @@ export async function getBandVideoBoard(prisma: PrismaClient, stream: StreamClie
       durationSeconds: row.durationSeconds,
       duration: formatDuration(row.durationSeconds),
       captionsLanguage: row.captionsLanguage,
+      showId: row.showId,
       failureReason: row.failureReason,
       uploaderName: row.uploader.name,
       removalRequestedByName: row.removalRequestedBy?.name ?? null,

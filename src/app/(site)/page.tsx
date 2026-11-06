@@ -3,12 +3,16 @@ import Link from "next/link";
 import { BlockContent } from "@/components/block-content";
 import { getPage, getSiteSettings } from "@/lib/content/service";
 import { SOCIAL_PLATFORMS } from "@/lib/content/settings";
+import { todayInBandTimeZone } from "@/lib/dates";
 import { db } from "@/lib/db";
+import { listPublicShows } from "@/lib/shows/queries";
+import { ShowCard } from "./shows/show-card";
 
 const SITE_URL = "https://theleftoversband.com";
 
 export default async function HomePage() {
-  const [intro, settings] = await Promise.all([getPage(db(), "home"), getSiteSettings(db())]);
+  const [intro, settings, shows] = await Promise.all([getPage(db(), "home"), getSiteSettings(db()), listPublicShows(db(), todayInBandTimeZone())]);
+  const nextShows = shows.upcoming.slice(0, 3);
 
   /** Structured data so search engines know this is a band, not the HBO series (SEO-3). */
   const musicGroupJsonLd = {
@@ -59,6 +63,23 @@ export default async function HomePage() {
         </section>
       )}
 
+      {nextShows.length > 0 && (
+        <section aria-labelledby="next-shows" className="mx-auto max-w-3xl px-6 pb-16">
+          <h2 id="next-shows" className="font-heading text-2xl font-bold tracking-wider uppercase">
+            Next shows
+          </h2>
+          <div className="mt-2 border-t border-olive/50">
+            {nextShows.map((show) => (
+              <ShowCard key={show.id} show={show} headingLevel={3} />
+            ))}
+          </div>
+          <p className="mt-4">
+            <Link href="/shows" className="underline">
+              All shows
+            </Link>
+          </p>
+        </section>
+      )}
       <section aria-labelledby="booking-heading" className="px-6 pb-16">
         <div className="panel-paper relative mx-auto max-w-xl px-6 py-8 text-center shadow-2xl">
           <Image

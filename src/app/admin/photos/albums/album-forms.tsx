@@ -12,6 +12,12 @@ export interface AlbumDetails {
   readonly description: string;
   readonly eventDate: string | null;
   readonly isPublic: boolean;
+  readonly showId: string | null;
+}
+
+export interface ShowOption {
+  readonly id: string;
+  readonly label: string;
 }
 
 export interface AlbumPhotoCard {
@@ -21,7 +27,7 @@ export interface AlbumPhotoCard {
   readonly image: PhotoImage | null;
 }
 
-function Fields({ defaults, errors }: { defaults?: AlbumDetails; errors?: Partial<Record<string, string>> }) {
+function Fields({ defaults, errors, shows }: { defaults?: AlbumDetails; errors?: Partial<Record<string, string>>; shows: readonly ShowOption[] }) {
   const prefix = useId();
   const described = (name: string) => ({
     id: `${prefix}-${name}`,
@@ -51,6 +57,22 @@ function Fields({ defaults, errors }: { defaults?: AlbumDetails; errors?: Partia
         <textarea name="description" rows={3} maxLength={1000} defaultValue={defaults?.description} className={DARK_INPUT_CLASS} {...described("description")} />
         <FieldError id={`${prefix}-description-error`} message={errors?.description} />
       </div>
+      {shows.length > 0 && (
+        <div className="sm:col-span-2">
+          <label htmlFor={`${prefix}-showId`} className={LABEL_CLASS}>
+            From a show (optional)
+          </label>
+          <select name="showId" defaultValue={defaults?.showId ?? ""} className={DARK_INPUT_CLASS} {...described("showId")}>
+            <option value="">Not linked to a show</option>
+            {shows.map((show) => (
+              <option key={show.id} value={show.id}>
+                {show.label}
+              </option>
+            ))}
+          </select>
+          <FieldError id={`${prefix}-showId-error`} message={errors?.showId} />
+        </div>
+      )}
       <label className="flex items-center gap-2 sm:col-span-2">
         <input type="checkbox" name="isPublic" defaultChecked={defaults?.isPublic ?? false} className="size-5" />
         Show on the public Photos page
@@ -59,11 +81,11 @@ function Fields({ defaults, errors }: { defaults?: AlbumDetails; errors?: Partia
   );
 }
 
-export function CreateAlbumForm() {
+export function CreateAlbumForm({ shows }: { shows: readonly ShowOption[] }) {
   const [state, onSubmit, pending] = useActionForm(createAlbumAction, INITIAL_ACTION_STATE);
   return (
     <form onSubmit={onSubmit} className="space-y-4">
-      <Fields errors={state.fieldErrors} />
+      <Fields errors={state.fieldErrors} shows={shows} />
       <button type="submit" disabled={pending} className="btn-primary disabled:opacity-60">
         Create album
       </button>
@@ -72,13 +94,13 @@ export function CreateAlbumForm() {
   );
 }
 
-export function EditAlbumForm({ albumId, version, details }: { albumId: string; version: number; details: AlbumDetails }) {
+export function EditAlbumForm({ albumId, version, details, shows }: { albumId: string; version: number; details: AlbumDetails; shows: readonly ShowOption[] }) {
   const [state, onSubmit, pending] = useActionForm(updateAlbumAction, INITIAL_ACTION_STATE);
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <input type="hidden" name="albumId" value={albumId} />
       <input type="hidden" name="version" value={version} />
-      <Fields defaults={details} errors={state.fieldErrors} />
+      <Fields defaults={details} errors={state.fieldErrors} shows={shows} />
       <button type="submit" disabled={pending} className="btn-primary disabled:opacity-60">
         Save album
       </button>

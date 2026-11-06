@@ -103,6 +103,7 @@ export async function saveVideoAction(_previous: ActionState, formData: FormData
         title: String(formData.get("title") ?? ""),
         description: String(formData.get("description") ?? ""),
         posterSeconds: String(formData.get("posterSeconds") ?? "0"),
+        showId: String(formData.get("showId") ?? ""),
       },
       requestId,
     );

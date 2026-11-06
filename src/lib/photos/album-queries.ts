@@ -147,6 +147,7 @@ export interface BandAlbum {
   readonly description: string;
   readonly eventDate: IsoDate | null;
   readonly isPublic: boolean;
+  readonly showId: string | null;
   readonly coverPhotoId: string | null;
   readonly photos: readonly AlbumPhoto[];
   /** Published photos not in this album yet, newest first. */
@@ -170,6 +171,7 @@ export async function getBandAlbum(prisma: PrismaClient, storage: ObjectStorage,
       description: true,
       eventDate: true,
       isPublic: true,
+      showId: true,
       coverPhotoId: true,
       items: { orderBy: { sortOrder: "asc" }, select: { photo: { select: PHOTO_FIELDS } } },
     },
@@ -198,6 +200,7 @@ export async function getBandAlbum(prisma: PrismaClient, storage: ObjectStorage,
     description: row.description,
     eventDate: row.eventDate ? fromUtc(row.eventDate) : null,
     isPublic: row.isPublic,
+    showId: row.showId,
     coverPhotoId: row.coverPhotoId,
     photos: await Promise.all(row.items.map((item) => toPhoto(item.photo))),
     addable: await Promise.all(candidates.map(toPhoto)),

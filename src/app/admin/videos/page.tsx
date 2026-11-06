@@ -5,6 +5,7 @@ import { todayInBandTimeZone } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { can } from "@/lib/permissions";
+import { showOptions } from "@/lib/shows/queries";
 import { type BandVideo, getBandVideoBoard } from "@/lib/video/queries";
 import { streamClient, type StorageUsage } from "@/lib/video/stream";
 import { type CardVideo, InProgressCard, PublishedCard, ReadyCard, RemovedCard, TakenDownCard } from "./video-cards";
@@ -29,6 +30,7 @@ function toCard(video: BandVideo): CardVideo {
     durationSeconds: video.durationSeconds,
     duration: video.duration,
     captionsLanguage: video.captionsLanguage,
+    showId: video.showId,
     failureReason: video.failureReason,
     uploaderName: video.uploaderName,
     removalRequestedByName: video.removalRequestedByName,
@@ -75,7 +77,7 @@ export default async function AdminVideosPage() {
     );
   }
   const isAdmin = can(viewer.role, "videos:manage");
-  const [board, usage] = await Promise.all([
+  const [board, usage, shows] = await Promise.all([
     getBandVideoBoard(db(), stream, viewer),
     isAdmin
       ? stream.storageUsage().catch((error: unknown) => {
@@ -83,6 +85,7 @@ export default async function AdminVideosPage() {
           return null;
         })
       : Promise.resolve(null),
+    isAdmin ? showOptions(db(), todayInBandTimeZone()) : Promise.resolve([]),
   ]);
   const today = todayInBandTimeZone();
   const processing = board.inProgress.some((video) => video.status !== "FAILED");
@@ -126,7 +129,7 @@ export default async function AdminVideosPage() {
             <ul className={GRID}>
               {board.ready.map((video) => (
                 <li key={`${video.id}:${video.version}`}>
-                  <ReadyCard video={toCard(video)} />
+                  <ReadyCard video={toCard(video)} shows={shows} />
                 </li>
               ))}
             </ul>
@@ -141,7 +144,7 @@ export default async function AdminVideosPage() {
           <ul className={GRID}>
             {board.published.map((video) => (
               <li key={`${video.id}:${video.version}`}>
-                <PublishedCard video={toCard(video)} isAdmin={isAdmin} today={today} />
+                <PublishedCard video={toCard(video)} isAdmin={isAdmin} today={today} shows={shows} />
               </li>
             ))}
           </ul>

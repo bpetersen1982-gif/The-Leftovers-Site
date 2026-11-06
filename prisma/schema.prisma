@@ -49,6 +49,7 @@ model User {
   takedownsResolved        TakedownNotice[]    @relation("TakedownResolver")
   videosUploaded           Video[]             @relation("VideoUploader")
   videoRemovalsRequested   Video[]             @relation("VideoRemovalRequester")
+  showsCreated             Show[]
   /// NOT-5: booking alerts by email / phone push. Both on by default.
   bookingEmailAlerts       Boolean             @default(true)
   bookingPushAlerts        Boolean             @default(true)
@@ -406,6 +407,7 @@ model BookingRequest {
   quotes           Quote[]
   claim            DateClaim?
   events           BookingEvent[]
+  show             Show?
 
   @@index([status, eventDate])
   @@index([eventDate])
@@ -605,6 +607,9 @@ model Album {
   coverPhoto   Photo?      @relation("AlbumCover", fields: [coverPhotoId], references: [id], onDelete: SetNull)
   createdById  String
   createdBy    User        @relation(fields: [createdById], references: [id])
+  /// Optional show this album is from (MED-5, EVT-3).
+  showId       String?     @db.Uuid
+  show         Show?       @relation(fields: [showId], references: [id], onDelete: SetNull)
   version      Int         @default(1)
   createdAt    DateTime    @default(now()) @db.Timestamptz(3)
   updatedAt    DateTime    @updatedAt @db.Timestamptz(3)
@@ -714,6 +719,9 @@ model Video {
   posterSeconds          Float       @default(0)
   /// Language of uploaded WebVTT captions, if any (MED-8, A11Y-3).
   captionsLanguage       String?
+  /// Optional show this video is from (MED-8, EVT-3).
+  showId                 String?     @db.Uuid
+  show                   Show?       @relation(fields: [showId], references: [id], onDelete: SetNull)
   publishedAt            DateTime?   @db.Timestamptz(3)
   removalRequestedAt     DateTime?   @db.Timestamptz(3)
   removalRequestedById   String?
@@ -749,4 +757,49 @@ model Song {
 
   @@index([artist, title])
   @@map("song")
+}
+
+// ---------------------------------------------------------------- shows
+
+enum ShowStatus {
+  SCHEDULED
+  SOLD_OUT
+  CANCELLED
+}
+
+/// A gig (requirements EVT-1..EVT-4, BOOK-20). Private shows (weddings, parties) are band-only.
+model Show {
+  id               String          @id @default(uuid()) @db.Uuid
+  /// URL path, set once at creation ("2026-11-14-zoo-bar"), so shared links never break.
+  slug             String          @unique
+  /// Calendar date in the band's time zone.
+  date             DateTime        @db.Date
+  /// Local times "HH:MM" in `timeZone`; end may be after midnight.
+  startTime        String?
+  endTime          String?
+  timeZone         String          @default("America/Chicago")
+  venueName        String
+  street           String          @default("")
+  city             String
+  state            String          @default("NE")
+  ticketUrl        String?
+  /// Free text, e.g. "Free", "$10 at the door".
+  priceText        String          @default("")
+  description      String          @default("")
+  status           ShowStatus      @default(SCHEDULED)
+  isPublic         Boolean         @default(true)
+  /// Set when created from a confirmed booking (BOOK-20).
+  bookingRequestId String?         @unique @db.Uuid
+  bookingRequest   BookingRequest? @relation(fields: [bookingRequestId], references: [id], onDelete: SetNull)
+  createdById      String
+  createdBy        User            @relation(fields: [createdById], references: [id])
+  version          Int             @default(1)
+  createdAt        DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime        @updatedAt @db.Timestamptz(3)
+  albums           Album[]
+  videos           Video[]
+
+  @@index([isPublic, date])
+  @@index([date])
+  @@map("show")
 }
