@@ -86,9 +86,9 @@ test("admin manages the lineup and the public Members page follows", async ({ pa
   await add.getByLabel("Instrument").fill("Drums");
   await add.getByRole("button", { name: "Add member" }).click();
   await expect(page.getByText("Added Mike Douglas.")).toBeVisible();
-  await add.getByLabel("Name").fill("Jake Meyers");
+  await add.getByLabel("Name").fill("Jake Myers");
   await add.getByRole("button", { name: "Add member" }).click();
-  await expect(page.getByText("Added Jake Meyers.")).toBeVisible();
+  await expect(page.getByText("Added Jake Myers.")).toBeVisible();
 
   await page.goto("/members");
   const cards = page.getByRole("main").getByRole("listitem");
@@ -98,11 +98,11 @@ test("admin manages the lineup and the public Members page follows", async ({ pa
 
   // Reorder, add a bio, hide a member.
   await page.goto("/admin/members");
-  await page.getByRole("button", { name: "Move Jake Meyers up" }).click();
-  await expect(page.getByRole("button", { name: "Move Jake Meyers up" })).toBeDisabled();
-  const jake = page.getByRole("article", { name: "Jake Meyers" });
+  await page.getByRole("button", { name: "Move Jake Myers up" }).click();
+  await expect(page.getByRole("button", { name: "Move Jake Myers up" })).toBeDisabled();
+  const jake = page.getByRole("article", { name: "Jake Myers" });
   await jake.getByLabel("Bio").fill("Bass and bad jokes.");
-  await jake.getByRole("button", { name: "Save Jake Meyers" }).click();
+  await jake.getByRole("button", { name: "Save Jake Myers" }).click();
   await expect(jake.getByText("Saved.")).toBeVisible();
   const mike = page.getByRole("article", { name: "Mike Douglas" });
   await mike.getByLabel("Show on the public Members page").uncheck();

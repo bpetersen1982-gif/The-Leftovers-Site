@@ -95,8 +95,8 @@ Target: **~$15–20/month** at launch. Example: 3 hours of video stored (180 min
 |---|---|
 | Erik Delaney | Admin (bootstrap) |
 | Brandon Petersen | Admin (bootstrap; site operator) |
-| Jim Meyers | Admin (invited) |
-| Jake Meyers | Band Member (invited) |
+| Jim Myers | Admin (invited) |
+| Jake Myers | Band Member (invited) |
 | Mike Douglas | Band Member (invited) |
 
 **Bootstrap:** Erik and Brandon are created as the first Admins by a one-time CLI command run against the database (`pnpm admin:bootstrap --email … --name …`), which is idempotent and refuses to run if it would change an existing user's role. Everyone else is invited from the admin area (AUTH-1).

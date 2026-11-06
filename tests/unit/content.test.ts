@@ -71,7 +71,7 @@ describe("social links", () => {
 
 describe("band member input", () => {
   it("accepts a name with an empty instrument and bio", () => {
-    expect(memberInputSchema.parse({ name: "Jake Meyers", instrument: "", bio: "", isVisible: true }).bio).toEqual([]);
+    expect(memberInputSchema.parse({ name: "Jake Myers", instrument: "", bio: "", isVisible: true }).bio).toEqual([]);
   });
 
   it("rejects markup in names and instruments", () => {
