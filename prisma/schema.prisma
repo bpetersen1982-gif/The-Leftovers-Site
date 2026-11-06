@@ -728,3 +728,25 @@ model Video {
   @@index([status, updatedAt])
   @@map("video")
 }
+
+// ---------------------------------------------------------------- song list
+
+/// A cover the band plays (requirements CNT-4). Public on /songs unless hidden.
+model Song {
+  id        String   @id @default(uuid()) @db.Uuid
+  title     String
+  artist    String
+  /// Release year; drives the decade filter. Optional.
+  year      Int?
+  /// Short public note, e.g. "Great first dance".
+  note      String   @default("")
+  isVisible Boolean  @default(true)
+  /// Lowercased "artist|title" with spacing and punctuation squeezed, so the same song can't be listed twice.
+  matchKey  String   @unique
+  version   Int      @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([artist, title])
+  @@map("song")
+}

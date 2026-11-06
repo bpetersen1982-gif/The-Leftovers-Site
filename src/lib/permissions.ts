@@ -44,6 +44,8 @@ export const PERMISSIONS = {
   "videos:view": ["ADMIN", "MEMBER"],
   "videos:manage": ["ADMIN"],
   "videos:requestRemoval": ["ADMIN", "MEMBER"],
+  /** Song list is site content (§2.3: editing content is Admin-only). */
+  "songs:manage": ["ADMIN"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

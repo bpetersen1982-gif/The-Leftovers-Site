@@ -152,3 +152,30 @@ test("band members can't edit content, and Admins see changes in the activity lo
   await expect(page.getByRole("cell", { name: "Edited page" })).toBeVisible();
   await expect(page.getByRole("cell", { name: "page: privacy" })).toBeVisible();
 });
+
+test("admin builds the song list; visitors search it and filter by decade", async ({ page, browser }) => {
+  await loginByEmail(page, ADMIN.email);
+  await page.goto("/admin/songs");
+  const add = page.getByRole("region", { name: "Add a song" });
+  await add.getByLabel("Song", { exact: true }).fill("Everlong");
+  await add.getByLabel("Artist", { exact: true }).fill("Foo Fighters");
+  await add.getByLabel("Year", { exact: true }).fill("1997");
+  await add.getByRole("button", { name: "Add song" }).click();
+  await expect(page.getByText('Added "Everlong".')).toBeVisible();
+  await expect(add.getByLabel("Song", { exact: true })).toHaveValue("");
+  await page.getByLabel("Paste a list").fill("The Killers - Mr. Brightside (2003)\nFoo Fighters - Everlong (1997)\nnot a song line");
+  await page.getByRole("button", { name: "Import" }).click();
+  await expect(page.getByText(/Added 1 song\. 1 already on the list\. 1 line skipped/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "On the list (2)" })).toBeVisible();
+
+  const visitor = await (await browser.newContext()).newPage();
+  await visitor.goto("/songs");
+  await expect(visitor.getByRole("status")).toHaveText("2 songs");
+  await visitor.getByLabel("Search songs or artists").fill("killers");
+  await expect(visitor.getByRole("cell", { name: "Mr. Brightside" })).toBeVisible();
+  await expect(visitor.getByRole("cell", { name: "Everlong" })).toHaveCount(0);
+  await visitor.getByLabel("Search songs or artists").fill("");
+  await visitor.getByRole("button", { name: "1990s" }).click();
+  await expect(visitor.getByRole("status")).toHaveText("1 of 2 songs");
+  await expect(visitor.getByRole("cell", { name: "Everlong" })).toBeVisible();
+});
