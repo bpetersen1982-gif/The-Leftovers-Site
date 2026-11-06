@@ -1,6 +1,6 @@
 "use server";
 
-import { headers } from "next/headers";
+import { clientIp } from "@/lib/client-ip";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getPricing } from "@/lib/booking/pricing";
@@ -43,10 +43,6 @@ function errorsOf(error: z.ZodError): FieldErrors {
   return result;
 }
 
-async function clientIp(): Promise<string> {
-  const list = await headers();
-  return list.get("x-real-ip") ?? list.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-}
 
 async function withinLimits(email: string | null): Promise<boolean> {
   const ip = await clientIp();

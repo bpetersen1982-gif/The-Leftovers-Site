@@ -24,6 +24,8 @@ function photoOrigins(): StorageCspOrigins {
 /** Cloudflare Stream: player iframes and thumbnails, and resumable (tus) uploads. */
 const STREAM_PLAYBACK = "https://*.cloudflarestream.com";
 const STREAM_UPLOADS = ["https://upload.cloudflarestream.com", "https://upload.videodelivery.net"];
+/** Cloudflare Turnstile spam check: script (nonce'd; host listed for browsers without strict-dynamic) and its iframe. */
+const TURNSTILE = "https://challenges.cloudflare.com";
 
 function withOrigins(base: string, origins: readonly string[]): string {
   return [base, ...origins].join(" ");
@@ -33,12 +35,12 @@ function buildCsp(nonce: string, isDev: boolean): string {
   const photos = photoOrigins();
   return [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' ${TURNSTILE}${isDev ? " 'unsafe-eval'" : ""}`,
     `style-src 'self' 'nonce-${nonce}'`,
     // style="" attributes (used by React/next/image) can't run script; <style> tags still need the nonce.
     "style-src-attr 'unsafe-inline'",
     withOrigins("img-src 'self' blob: data:", [...photos.img, STREAM_PLAYBACK]),
-    `frame-src ${STREAM_PLAYBACK}`,
+    `frame-src ${STREAM_PLAYBACK} ${TURNSTILE}`,
     "font-src 'self'",
     // Browsers upload photos straight to storage with a signed URL.
     withOrigins("connect-src 'self'", [...photos.connect, ...STREAM_UPLOADS]),

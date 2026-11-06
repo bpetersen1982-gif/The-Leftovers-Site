@@ -47,6 +47,9 @@ export default defineConfig({
       VAPID_SUBJECT: "mailto:booking@example.test",
       // Local S3 server with the test buckets (never R2).
       ...TEST_STORAGE_ENV,
+      // Cloudflare's always-pass Turnstile test keys (real keys block automated browsers).
+      TURNSTILE_SITE_KEY: "1x00000000000000000000AA",
+      TURNSTILE_SECRET_KEY: "1x0000000000000000000000000000000AA",
     },
   },
 });
