@@ -4,7 +4,7 @@ import type { Block } from "./blocks";
  * Admin-editable pages (requirements CNT-1). Each has default copy so the site reads
  * correctly before anyone edits it; once an Admin saves, the stored version is used.
  */
-export const PAGE_SLUGS = ["home", "about", "contact", "privacy", "copyright"] as const;
+export const PAGE_SLUGS = ["home", "about", "contact", "fan-wall", "privacy", "copyright"] as const;
 export type PageSlug = (typeof PAGE_SLUGS)[number];
 
 export function isPageSlug(value: string): value is PageSlug {
@@ -58,6 +58,18 @@ export const PAGES: Record<PageSlug, PageDefinition> = {
       },
     ],
   },
+  "fan-wall": {
+    slug: "fan-wall",
+    title: "Fan Wall",
+    path: "/fan-wall",
+    description: "Intro text above the Fan Wall form.",
+    defaultContent: [
+      {
+        type: "paragraph",
+        text: "Were you at a show? Tell us about it. Add a photo if you took one. A band member reads every post before it shows up here.",
+      },
+    ],
+  },
   privacy: {
     slug: "privacy",
     title: "Privacy",
@@ -70,13 +82,15 @@ export const PAGES: Record<PageSlug, PageDefinition> = {
         items: [
           "If you email us or send a booking request, we keep your name, contact details, and event details so we can reply and plan the show.",
           "Band members who log in have an account with their name and email.",
+          "If you post on the Fan Wall, we keep your name, message, any photo, and your email if you give one. Only the name, message, and photo are shown, and only after a band member approves them. Your email is never shown.",
+          "If you join the mailing list, we keep your email address and when you confirmed it. You can leave the list any time from any email we send.",
           "We don't sell or share your information, and we don't use advertising trackers.",
         ],
       },
       { type: "heading", text: "Cookies" },
       {
         type: "paragraph",
-        text: "Visitors don't get tracking cookies. Band members who log in get a login cookie that keeps them signed in.",
+        text: "Visitors don't get tracking cookies. Band members who log in get a login cookie that keeps them signed in. Some forms use Cloudflare Turnstile, a spam check that doesn't track you across sites.",
       },
       { type: "heading", text: "Your choices" },
       {

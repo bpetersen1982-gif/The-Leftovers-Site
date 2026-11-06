@@ -7,6 +7,7 @@ import { PhotoImg } from "@/components/photo-img";
 import { VideoPlayer } from "@/components/video-player";
 import { formatLongDate, todayInBandTimeZone } from "@/lib/dates";
 import { db } from "@/lib/db";
+import { fanPostsForShow } from "@/lib/fan/queries";
 import { formatShowTime, getPublicShow, musicEventJsonLd } from "@/lib/shows/queries";
 import { SHOW_STATUS_LABELS } from "@/lib/shows/service";
 import { objectStorage } from "@/lib/storage";
@@ -29,6 +30,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 export default async function ShowPage({ params }: { params: Params }) {
   const show = await loadShow((await params).slug);
   if (!show) notFound();
+  const fanPosts = await fanPostsForShow(db(), objectStorage(), show.id);
   const time = formatShowTime(show);
   const isPast = show.date < todayInBandTimeZone();
   const address = [show.street, `${show.city}, ${show.state}`].filter(Boolean).join(", ");
@@ -91,6 +93,27 @@ export default async function ShowPage({ params }: { params: Params }) {
               </li>
             ))}
           </ul>
+        </section>
+      )}
+      {fanPosts.length > 0 && (
+        <section aria-labelledby="show-fans" className="mt-12">
+          <h2 id="show-fans" className="font-heading text-2xl font-bold tracking-wider uppercase">
+            From the crowd
+          </h2>
+          <ul className="mt-4 space-y-4">
+            {fanPosts.map((post) => (
+              <li key={post.id} className="panel-paper px-5 py-4">
+                {post.photo && <PhotoImg image={post.photo.image} alt={post.photo.altText} sizes="(min-width: 896px) 832px, 100vw" className="mb-3 max-h-96 w-full bg-charcoal object-contain" />}
+                <p className="whitespace-pre-line">{post.message}</p>
+                <p className="mt-2 text-sm font-semibold">{post.displayName}</p>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-4">
+            <Link href="/fan-wall" className="underline">
+              Were you there? Leave a note on the Fan Wall
+            </Link>
+          </p>
         </section>
       )}
       <JsonLd data={musicEventJsonLd(show)} />

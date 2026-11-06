@@ -79,6 +79,12 @@ export default async function AdminHomePage() {
             : upload photos from shows{isAdmin ? " and approve band members' uploads" : " (an Admin approves them)"}.
           </li>
           <li>
+            <Link href="/admin/fan-wall" className="underline">
+              Fan Wall
+            </Link>
+            : approve or reject fan posts before they show up.
+          </li>
+          <li>
             <Link href="/admin/videos" className="underline">
               Videos
             </Link>

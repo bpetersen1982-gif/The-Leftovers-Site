@@ -49,6 +49,10 @@ export const PERMISSIONS = {
   /** §2.3 "Manage shows and lineups": Admin only. Members can see the band's show list. */
   "shows:view": ["ADMIN", "MEMBER"],
   "shows:manage": ["ADMIN"],
+  /** APR-3..APR-5: Members and Admins moderate fan posts; Admin decisions are final. */
+  "fan:moderate": ["ADMIN", "MEMBER"],
+  "fan:override": ["ADMIN"],
+  "fan:delete": ["ADMIN"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

@@ -50,6 +50,8 @@ model User {
   videosUploaded           Video[]             @relation("VideoUploader")
   videoRemovalsRequested   Video[]             @relation("VideoRemovalRequester")
   showsCreated             Show[]
+  fanPostsDecided          FanPost[]           @relation("FanPostDecider")
+  moderationDecisions      ModerationDecision[]
   /// NOT-5: booking alerts by email / phone push. Both on by default.
   bookingEmailAlerts       Boolean             @default(true)
   bookingPushAlerts        Boolean             @default(true)
@@ -798,8 +800,88 @@ model Show {
   updatedAt        DateTime        @updatedAt @db.Timestamptz(3)
   albums           Album[]
   videos           Video[]
+  fanPosts         FanPost[]
 
   @@index([isPublic, date])
   @@index([date])
   @@map("show")
+}
+
+// ---------------------------------------------------------------- fan wall
+
+/// Fan posts are pre-moderated (requirements FAN-1..FAN-5, APR-3..APR-5). Only APPROVED is public.
+enum FanPostStatus {
+  /// Sent with a photo that's still uploading; becomes PENDING once the photo is in (or given up on).
+  AWAITING_PHOTO
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ModerationVerdict {
+  APPROVED
+  REJECTED
+}
+
+model FanPost {
+  id                   String        @id @default(uuid()) @db.Uuid
+  status               FanPostStatus @default(PENDING)
+  displayName          String
+  /// Plain text, shown escaped (FAN-5).
+  message              String
+  /// Optional; only the band ever sees it (FAN-1).
+  email                String?
+  /// "Which show were you at?" (FAN-1)
+  showId               String?       @db.Uuid
+  show                 Show?         @relation(fields: [showId], references: [id], onDelete: SetNull)
+  // Optional photo (FAN-2). Files use the same key layout as band photos, keyed by this post's id.
+  photoUploadTokenHash String?       @unique
+  photoUploadExpiresAt DateTime?     @db.Timestamptz(3)
+  photoDeclaredType    String?
+  photoDeclaredSize    Int?
+  photoWidth           Int?
+  photoHeight          Int?
+  photoVariants        Json          @default("[]")
+  photoBlurDataUrl     String?
+  /// Public bucket prefix while APPROVED.
+  photoPublicPrefix    String?       @unique
+  photoAltText         String        @default("")
+  photoFailureReason   String?
+  /// The fan confirmed they took the photo and allow the band to show it (LEG-5).
+  photoConsentAt       DateTime?     @db.Timestamptz(3)
+  decidedAt            DateTime?     @db.Timestamptz(3)
+  decidedById          String?
+  decidedBy            User?         @relation("FanPostDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedByRole        Role?
+  /// Shown only to the band.
+  decisionReason       String?
+  version              Int           @default(1)
+  createdAt            DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime      @updatedAt @db.Timestamptz(3)
+  decisions            ModerationDecision[]
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([showId, status])
+  @@index([status, photoUploadExpiresAt])
+  @@map("fan_post")
+}
+
+/// Every approve/reject, who made it and in what role (APR-4). Overrides point at the decision they replaced.
+model ModerationDecision {
+  id                  String               @id @default(uuid()) @db.Uuid
+  fanPostId           String               @db.Uuid
+  fanPost             FanPost              @relation(fields: [fanPostId], references: [id], onDelete: Cascade)
+  verdict             ModerationVerdict
+  actorId             String
+  actor               User                 @relation(fields: [actorId], references: [id])
+  actorRole           Role
+  reason              String               @default("")
+  overridesDecisionId String?              @db.Uuid
+  overridesDecision   ModerationDecision?  @relation("DecisionOverride", fields: [overridesDecisionId], references: [id], onDelete: SetNull)
+  overriddenBy        ModerationDecision[] @relation("DecisionOverride")
+  createdAt           DateTime             @default(now()) @db.Timestamptz(3)
+
+  @@index([createdAt(sort: Desc)])
+  @@index([fanPostId, createdAt])
+  @@map("moderation_decision")
 }

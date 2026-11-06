@@ -5,6 +5,7 @@ import { logger } from "../logger";
 import { sendEmail } from "../mail/mailer";
 import { emailLayout, escapeHtml } from "../mail/templates";
 import { can } from "../permissions";
+import { releaseStalledFanPhotos } from "../fan/service";
 import { removePrivateFiles } from "../photos/files";
 import type { ObjectStorage } from "../storage";
 
@@ -14,8 +15,9 @@ import type { ObjectStorage } from "../storage";
  * - photos stuck in PROCESSING (the app restarted mid-way) are marked FAILED so the
  *   uploader sees it and can retry
  * - FAILED records are removed after a week (their files are already gone)
- * - once a day, Admins get a digest of photos waiting for review and photos Members took
- *   off the site (requirements APR-7, APR-10)
+ * - fan posts whose photo upload never finished go to moderation as text only
+ * - once a day, each band member gets one email listing what's waiting on them: Members
+ *   see fan posts; Admins also see photos to review and photos Members took down (APR-10)
  *
  * Runs under a Postgres advisory lock, so only one app instance does the work.
  */
@@ -36,6 +38,8 @@ export interface PhotoJobResult {
   readonly stuckFailed: number;
   readonly failedPurged: number;
   readonly digestsSent: number;
+  /** Fan posts whose photo never arrived, sent to moderation as text only. */
+  readonly fanPhotosReleased: number;
 }
 
 function bandHour(now: Date): number {
@@ -52,46 +56,84 @@ async function claimDigest(tx: Prisma.TransactionClient, now: Date): Promise<boo
   return true;
 }
 
-function photos(count: number): string {
-  return `${count} ${count === 1 ? "photo" : "photos"}`;
+function plural(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`;
 }
 
-export function reviewDigestEmail(to: string, pending: number, oldestDays: number, removals: number, appUrl: string) {
-  const parts: string[] = [];
-  if (pending > 0) {
-    const age = oldestDays >= 1 ? ` The oldest has waited ${oldestDays} day${oldestDays === 1 ? "" : "s"}.` : "";
-    parts.push(`${photos(pending)} ${pending === 1 ? "is" : "are"} waiting for your review.${age}`);
+export interface DigestCounts {
+  /** Band members' photos waiting for an Admin. */
+  readonly photos: number;
+  readonly oldestPhotoDays: number;
+  /** Published photos band members took off the site. */
+  readonly removals: number;
+  /** Fan Wall posts waiting for a band member. */
+  readonly fanPosts: number;
+}
+
+/** One email per person per day listing what's waiting on them (requirements APR-10). */
+export function reviewDigestEmail(to: string, counts: DigestCounts, appUrl: string) {
+  const lines: { text: string; url: string; subject: string }[] = [];
+  if (counts.fanPosts > 0) {
+    lines.push({
+      text: `${plural(counts.fanPosts, "fan post is", "fan posts are")} waiting on the Fan Wall.`,
+      url: `${appUrl}/admin/fan-wall`,
+      subject: `${plural(counts.fanPosts, "fan post", "fan posts")} to review`,
+    });
   }
-  if (removals > 0) {
-    parts.push(`Band members took ${photos(removals)} off the site. Delete ${removals === 1 ? "it" : "them"} for good or put ${removals === 1 ? "it" : "them"} back.`);
+  if (counts.photos > 0) {
+    const age = counts.oldestPhotoDays >= 1 ? ` The oldest has waited ${plural(counts.oldestPhotoDays, "day", "days")}.` : "";
+    lines.push({
+      text: `${plural(counts.photos, "photo is", "photos are")} waiting for your review.${age}`,
+      url: `${appUrl}/admin/photos#review`,
+      subject: `${plural(counts.photos, "photo", "photos")} to review`,
+    });
   }
-  const summary = parts.join(" ");
-  const url = `${appUrl}/admin/photos${pending > 0 ? "#review" : "#removed"}`;
-  const footer = "You get this once a day while band members' photos need an Admin. Nothing is public until an Admin approves it.";
-  const subject = pending > 0 ? `${photos(pending)} to review` : `${photos(removals)} taken off the site`;
+  if (counts.removals > 0) {
+    const them = counts.removals === 1 ? "it" : "them";
+    lines.push({
+      text: `Band members took ${plural(counts.removals, "photo", "photos")} off the site. Delete ${them} for good or put ${them} back.`,
+      url: `${appUrl}/admin/photos#removed`,
+      subject: `${plural(counts.removals, "photo", "photos")} taken off the site`,
+    });
+  }
+  const single = lines.length === 1 ? lines[0] : undefined;
+  const subject = single ? single.subject : `${plural(lines.length, "thing", "things")} to review`;
+  const url = single ? single.url : `${appUrl}/admin`;
+  const footer = "You get this once a day while something needs the band. Nothing fans or band members send is public until it's approved.";
+  const text = lines.map((line) => `${line.text}\n${line.url}`).join("\n\n");
+  const body = lines.map((line) => escapeHtml(line.text)).join("<br><br>");
   return {
     to,
     subject: `${subject}: The Leftovers`,
-    text: `${summary}\n\nReview them:\n${url}\n\n${footer}\n`,
-    html: emailLayout({ heading: "Photos to review", body: escapeHtml(summary), actionLabel: "Review photos", actionUrl: url, footer }),
+    text: `${text}\n\n${footer}\n`,
+    html: emailLayout({ heading: "Waiting for the band", body, actionLabel: single ? "Review" : "Open the band site", actionUrl: url, footer }),
   };
 }
 
 async function sendDigest(prisma: PrismaClient, now: Date): Promise<number> {
-  const [pending, removals, oldest, admins] = await Promise.all([
+  const [photosPending, removals, fanPosts, oldest, users] = await Promise.all([
     prisma.photo.count({ where: { status: "PENDING_REVIEW" } }),
     // Admin removals don't need a reminder: the Admin who did it already knows.
     prisma.photo.count({ where: { status: "DELETION_REQUESTED", removalRequestedByRole: "MEMBER" } }),
+    prisma.fanPost.count({ where: { status: "PENDING" } }),
     prisma.photo.findFirst({ where: { status: "PENDING_REVIEW" }, orderBy: { submittedAt: "asc" }, select: { submittedAt: true } }),
     prisma.user.findMany({ where: { deactivatedAt: null }, select: { email: true, role: true } }),
   ]);
-  if (pending === 0 && removals === 0) return 0;
-  const oldestDays = oldest?.submittedAt ? Math.floor((now.getTime() - oldest.submittedAt.getTime()) / (24 * 60 * MINUTE)) : 0;
+  const oldestPhotoDays = oldest?.submittedAt ? Math.floor((now.getTime() - oldest.submittedAt.getTime()) / (24 * 60 * MINUTE)) : 0;
   const appUrl = env().APP_URL;
   let sent = 0;
-  for (const admin of admins.filter((user) => can(user.role, "photos:review"))) {
+  for (const user of users) {
+    // Admins: everything. Members: fan content only (APR-10).
+    const reviewsPhotos = can(user.role, "photos:review");
+    const counts: DigestCounts = {
+      photos: reviewsPhotos ? photosPending : 0,
+      oldestPhotoDays,
+      removals: reviewsPhotos ? removals : 0,
+      fanPosts: can(user.role, "fan:moderate") ? fanPosts : 0,
+    };
+    if (counts.photos + counts.removals + counts.fanPosts === 0) continue;
     try {
-      await sendEmail(reviewDigestEmail(admin.email, pending, oldestDays, removals, appUrl), { kind: "photo-review-digest" });
+      await sendEmail(reviewDigestEmail(user.email, counts, appUrl), { kind: "review-digest" });
       sent += 1;
     } catch {
       // sendEmail already logged the failure with context; keep going for the others.
@@ -128,13 +170,14 @@ export async function runPhotoJobs(prisma: PrismaClient, storage: ObjectStorage 
     const digestDue = await claimDigest(tx, now);
     return { removeFilesOf: [...abandoned, ...stuck].map((row) => row.id), abandoned: abandoned.length, stuck: stuck.length, purged: purged.count, digestDue };
   });
-  if (!work) return { ran: false, abandonedRemoved: 0, stuckFailed: 0, failedPurged: 0, digestsSent: 0 };
+  if (!work) return { ran: false, abandonedRemoved: 0, stuckFailed: 0, failedPurged: 0, digestsSent: 0, fanPhotosReleased: 0 };
 
   // Outside the transaction: storage and email are slow and must not hold the lock.
   if (storage) for (const photoId of work.removeFilesOf) await removePrivateFiles(storage, photoId);
+  const fanPhotosReleased = await releaseStalledFanPhotos({ prisma, storage }, now);
   const digestsSent = work.digestDue ? await sendDigest(prisma, now) : 0;
 
-  const result = { ran: true, abandonedRemoved: work.abandoned, stuckFailed: work.stuck, failedPurged: work.purged, digestsSent };
-  if (work.abandoned + work.stuck + work.purged + digestsSent > 0) logger.info(result, "photo jobs ran");
+  const result = { ran: true, abandonedRemoved: work.abandoned, stuckFailed: work.stuck, failedPurged: work.purged, digestsSent, fanPhotosReleased };
+  if (work.abandoned + work.stuck + work.purged + digestsSent + fanPhotosReleased > 0) logger.info(result, "photo jobs ran");
   return result;
 }

@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { listPublicAlbumPaths } from "@/lib/photos/album-queries";
 
 const SITE_URL = "https://theleftoversband.com";
-const STATIC_PATHS = ["", "/book", "/shows", "/about", "/members", "/photos", "/videos", "/songs", "/contact", "/privacy", "/copyright"] as const;
+const STATIC_PATHS = ["", "/book", "/shows", "/about", "/members", "/photos", "/videos", "/songs", "/fan-wall", "/contact", "/privacy", "/copyright"] as const;
 
 /**
  * Public pages only; admin, login, and invite routes are excluded (SEC-7). Built per

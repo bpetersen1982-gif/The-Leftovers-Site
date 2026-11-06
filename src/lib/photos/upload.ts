@@ -2,12 +2,12 @@ import type { AuditActor } from "../audit";
 import { logger } from "../logger";
 import { can } from "../permissions";
 import { consumeRateLimit } from "../rate-limit";
-import { Semaphore } from "../semaphore";
 import type { PresignedUpload } from "../storage";
 import type { PhotoDeps } from "./deps";
 import { PhotoError } from "./errors";
-import { originalKey, privateFileKey, removePrivateFiles, type StoredFile } from "./files";
-import { ACCEPTED_TYPES, ImageRejectedError, processPhoto, type ProcessedFile } from "./image";
+import { originalKey, removePrivateFiles } from "./files";
+import { processingSlots, storeProcessedFiles } from "./processing";
+import { ACCEPTED_TYPES, ImageRejectedError, processPhoto } from "./image";
 import { displayFilename, MAX_PHOTO_BYTES, type UploadRequest, uploadRequestSchema } from "./validation";
 
 /**
@@ -23,8 +23,6 @@ const UPLOAD_URL_TTL_SECONDS = 15 * 60;
 /** Uploads a person can have in flight at once (a post-show batch fits comfortably). */
 const MAX_IN_FLIGHT_PER_USER = 40;
 const UPLOAD_RATE = { max: 300, windowMs: 60 * 60_000 } as const;
-/** Image processing is CPU/memory heavy; at most this many run at once per app instance. */
-const processing = new Semaphore(2);
 
 const GENERIC_FAILURE = "Something went wrong processing this photo. Try uploading it again.";
 
@@ -72,16 +70,6 @@ export type CompletedUpload =
   | { readonly status: "DRAFT"; readonly photoId: string }
   | { readonly status: "FAILED"; readonly photoId: string; readonly reason: string };
 
-async function storeVariants(deps: PhotoDeps, photoId: string, files: readonly ProcessedFile[], jpeg: ProcessedFile): Promise<StoredFile[]> {
-  const stored: StoredFile[] = [];
-  const entries = [...files.map((file) => ({ file, name: `w${file.width}.webp` })), { file: jpeg, name: "full.jpg" }];
-  for (const { file, name } of entries) {
-    await deps.storage.putPrivate(privateFileKey(photoId, name), file.data, file.contentType);
-    stored.push({ file: name, kind: file.kind, width: file.width, height: file.height, contentType: file.contentType, bytes: file.data.byteLength });
-  }
-  return stored;
-}
-
 async function failPhoto(deps: PhotoDeps, photoId: string, reason: string): Promise<void> {
   await deps.prisma.photo.updateMany({
     where: { id: photoId, status: "PROCESSING" },
@@ -118,11 +106,11 @@ export async function completeUpload(deps: PhotoDeps, actor: AuditActor, photoId
     const declared = ACCEPTED_TYPES[photo.declaredType];
     if (!declared) throw new ImageRejectedError("Only JPEG, PNG, WebP, and HEIC photos can be uploaded.");
 
-    const result = await processing.run(async () => {
+    const result = await processingSlots.run(async () => {
       const original = await deps.storage.readPrivate(photo.originalKey, MAX_PHOTO_BYTES);
       return processPhoto(original, declared);
     });
-    const stored = await storeVariants(deps, photoId, result.variants, result.jpeg);
+    const stored = await storeProcessedFiles(deps.storage, photoId, result);
 
     const saved = await deps.prisma.photo.updateMany({
       where: { id: photoId, status: "PROCESSING" },
