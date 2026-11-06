@@ -4,7 +4,7 @@ import { logger } from "@/lib/logger";
 import { videoDeps } from "@/lib/video/deps";
 import { applyStreamWebhook } from "@/lib/video/service";
 import { streamConfig } from "@/lib/video/stream";
-import { verifyStreamWebhook } from "@/lib/video/webhook";
+import { checkStreamWebhook } from "@/lib/video/webhook";
 
 /**
  * Cloudflare Stream webhook (requirements MED-7): "video ready" / "video failed".
@@ -25,8 +25,12 @@ export async function POST(request: Request): Promise<NextResponse> {
   const rawBody = await request.text();
   if (Buffer.byteLength(rawBody, "utf8") > MAX_BODY_BYTES) return NextResponse.json({ error: "too large" }, { status: 413 });
 
-  if (!verifyStreamWebhook({ secret, header: request.headers.get("webhook-signature"), rawBody })) {
-    logger.warn({ path: "/api/stream/webhook" }, "rejected stream webhook with a bad or stale signature");
+  const check = checkStreamWebhook({ secret, header: request.headers.get("webhook-signature"), rawBody });
+  if (!check.ok) {
+    logger.warn(
+      { path: "/api/stream/webhook", reason: check.reason, skewSeconds: check.skewSeconds, keys: check.keys, bodyBytes: rawBody.length },
+      "rejected stream webhook",
+    );
     return NextResponse.json({ error: "bad signature" }, { status: 401 });
   }
 
