@@ -53,6 +53,8 @@ export const PERMISSIONS = {
   "fan:moderate": ["ADMIN", "MEMBER"],
   "fan:override": ["ADMIN"],
   "fan:delete": ["ADMIN"],
+  /** Subscribers' emails are personal data: Admins only. */
+  "mailing:manage": ["ADMIN"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

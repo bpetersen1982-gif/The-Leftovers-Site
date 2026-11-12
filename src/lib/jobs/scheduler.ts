@@ -1,5 +1,6 @@
 import { db } from "../db";
 import { logger } from "../logger";
+import { purgeStalePending } from "../mailing/service";
 import { objectStorage } from "../storage";
 import { runBookingJobs } from "./booking-jobs";
 import { runPhotoJobs } from "./photo-jobs";
@@ -27,6 +28,12 @@ async function tick(): Promise<void> {
     await runPhotoJobs(db(), objectStorage());
   } catch (error) {
     logger.error({ err: error }, "photo jobs failed");
+  }
+  try {
+    const purged = await purgeStalePending(db());
+    if (purged > 0) logger.info({ purged }, "unconfirmed mailing list sign-ups deleted");
+  } catch (error) {
+    logger.error({ err: error }, "mailing list cleanup failed");
   }
   try {
     const deps = videoDeps();

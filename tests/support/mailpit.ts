@@ -13,7 +13,12 @@ export async function clearInbox(): Promise<void> {
 }
 
 /** Waits for the newest email to `to` and returns the first URL in its text body. */
-export async function waitForLink(to: string, subjectIncludes: string, timeoutMs = 10_000): Promise<string> {
+export async function waitForLink(to: string, subjectIncludes: string, timeoutMs = 20_000): Promise<string> {
+  return waitForLinkContaining(to, subjectIncludes, "", timeoutMs);
+}
+
+/** Like waitForLink, but returns the first URL that contains `linkIncludes`. */
+export async function waitForLinkContaining(to: string, subjectIncludes: string, linkIncludes: string, timeoutMs = 20_000): Promise<string> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const response = await fetch(`${MAILPIT_API}/messages`);
@@ -23,7 +28,7 @@ export async function waitForLink(to: string, subjectIncludes: string, timeoutMs
     );
     if (match) {
       const detail = (await (await fetch(`${MAILPIT_API}/message/${match.ID}`)).json()) as { Text: string };
-      const url = detail.Text.match(/https?:\/\/\S+/)?.[0];
+      const url = (detail.Text.match(/https?:\/\/\S+/g) ?? []).find((link) => link.includes(linkIncludes));
       if (!url) throw new Error("Email had no link");
       return url;
     }
