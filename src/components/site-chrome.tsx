@@ -76,6 +76,11 @@ export async function SiteChrome({ children }: { children: ReactNode }) {
           )}
           <ul className="flex gap-4">
             <li>
+              <Link href="/press" className="underline">
+                Press kit
+              </Link>
+            </li>
+            <li>
               <Link href="/mailing-list" className="underline">
                 Get show emails
               </Link>

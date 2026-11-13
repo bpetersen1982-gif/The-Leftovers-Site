@@ -52,6 +52,7 @@ model User {
   showsCreated             Show[]
   fanPostsDecided          FanPost[]           @relation("FanPostDecider")
   moderationDecisions      ModerationDecision[]
+  pressFilesUploaded       PressFile[]
   /// NOT-5: booking alerts by email / phone push. Both on by default.
   bookingEmailAlerts       Boolean             @default(true)
   bookingPushAlerts        Boolean             @default(true)
@@ -572,6 +573,8 @@ model Photo {
   createdAt        DateTime    @default(now()) @db.Timestamptz(3)
   updatedAt        DateTime    @updatedAt @db.Timestamptz(3)
 
+  /// Offered as a downloadable press photo on /press (CNT-3). Only shown while APPROVED.
+  isPressPhoto     Boolean     @default(false)
   albumItems       AlbumItem[]
   coverOf          Album[]     @relation("AlbumCover")
 
@@ -721,6 +724,8 @@ model Video {
   posterSeconds          Float       @default(0)
   /// Language of uploaded WebVTT captions, if any (MED-8, A11Y-3).
   captionsLanguage       String?
+  /// Shown as a video highlight on /press (CNT-3). Only while PUBLISHED.
+  isPressHighlight       Boolean     @default(false)
   /// Optional show this video is from (MED-8, EVT-3).
   showId                 String?     @db.Uuid
   show                   Show?       @relation(fields: [showId], references: [id], onDelete: SetNull)
@@ -914,4 +919,31 @@ model Subscriber {
   @@index([status, confirmedAt(sort: Desc)])
   @@index([status, createdAt])
   @@map("subscriber")
+}
+
+// ---------------------------------------------------------------- press kit
+
+enum PressFileKind {
+  /// Hi-res logo (PNG or JPEG).
+  LOGO
+  /// Tech rider PDF (BOOK-22).
+  RIDER
+  /// Stage plot PDF (BOOK-22).
+  STAGE_PLOT
+}
+
+/// One current file per kind, downloadable from /press (CNT-3, BOOK-22). Replacing deletes the old file.
+model PressFile {
+  kind         PressFileKind @id
+  /// Public bucket key; random per upload so an old link never serves the new file.
+  publicKey    String        @unique
+  contentType  String
+  bytes        Int
+  width        Int?
+  height       Int?
+  uploadedById String?
+  uploadedBy   User?         @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  uploadedAt   DateTime      @default(now()) @db.Timestamptz(3)
+
+  @@map("press_file")
 }

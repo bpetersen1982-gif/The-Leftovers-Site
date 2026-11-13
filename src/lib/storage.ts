@@ -68,7 +68,8 @@ export interface ObjectStorage {
   readPrivate(key: string, maxBytes: number): Promise<Buffer>;
   putPrivate(key: string, body: Buffer, contentType: string): Promise<void>;
   /** Copies a private object into the public bucket under the same or a new key. */
-  publish(privateKey: string, publicKey: string, input: { contentType: string; cacheControl: string }): Promise<void>;
+  /** `contentDisposition` e.g. 'attachment; filename="x.pdf"' makes browsers download instead of open. */
+  publish(privateKey: string, publicKey: string, input: { contentType: string; cacheControl: string; contentDisposition?: string }): Promise<void>;
   deletePrivate(keys: readonly string[]): Promise<void>;
   /** Deletes every private object under a prefix ending in "/" (e.g. a photo's variants). */
   deletePrivatePrefix(prefix: string): Promise<void>;
@@ -203,7 +204,7 @@ export function createObjectStorage(config: StorageConfig): ObjectStorage {
       );
     },
 
-    async publish(privateKey, publicKey, { contentType, cacheControl }) {
+    async publish(privateKey, publicKey, { contentType, cacheControl, contentDisposition }) {
       assertSafeKey(privateKey);
       assertSafeKey(publicKey);
       await client.send(
@@ -214,6 +215,7 @@ export function createObjectStorage(config: StorageConfig): ObjectStorage {
           MetadataDirective: "REPLACE",
           ContentType: contentType,
           CacheControl: cacheControl,
+          ...(contentDisposition ? { ContentDisposition: contentDisposition } : {}),
         }),
       );
     },

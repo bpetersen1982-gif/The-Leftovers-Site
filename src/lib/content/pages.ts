@@ -4,7 +4,7 @@ import type { Block } from "./blocks";
  * Admin-editable pages (requirements CNT-1). Each has default copy so the site reads
  * correctly before anyone edits it; once an Admin saves, the stored version is used.
  */
-export const PAGE_SLUGS = ["home", "about", "contact", "fan-wall", "privacy", "copyright"] as const;
+export const PAGE_SLUGS = ["home", "about", "contact", "fan-wall", "press-short-bio", "press-long-bio", "press-rider", "privacy", "copyright"] as const;
 export type PageSlug = (typeof PAGE_SLUGS)[number];
 
 export function isPageSlug(value: string): value is PageSlug {
@@ -69,6 +69,28 @@ export const PAGES: Record<PageSlug, PageDefinition> = {
         text: "Were you at a show? Tell us about it. Add a photo if you took one. A band member reads every post before it shows up here.",
       },
     ],
+  },
+  // Press kit sections (CNT-3). Empty until the band writes them; /press shows "coming soon".
+  "press-short-bio": {
+    slug: "press-short-bio",
+    title: "Press kit: short bio",
+    path: "/press",
+    description: "Two or three sentences for listings, posters, and social posts.",
+    defaultContent: [],
+  },
+  "press-long-bio": {
+    slug: "press-long-bio",
+    title: "Press kit: long bio",
+    path: "/press",
+    description: "The full story, for press and event pages.",
+    defaultContent: [],
+  },
+  "press-rider": {
+    slug: "press-rider",
+    title: "Press kit: rider and stage needs",
+    path: "/press",
+    description: "Power, stage size, load-in, sound, and hospitality needs. You can also upload a rider PDF on the Press kit page.",
+    defaultContent: [],
   },
   privacy: {
     slug: "privacy",

@@ -95,6 +95,17 @@ export default async function BookPage({ searchParams }: { searchParams: Promise
         Pick an open date to request it. We play bars, clubs, festivals, weddings, graduations, private parties, and
         corporate events. Dates are open up to 18 months out.
       </p>
+      <p className="mt-2 text-sm">
+        Need bios, photos, or our rider? See the{" "}
+        <Link href="/press" className="underline">
+          press kit
+        </Link>{" "}
+        and{" "}
+        <Link href="/songs" className="underline">
+          song list
+        </Link>
+        .
+      </p>
 
       <dl className="mt-6 grid gap-2 text-sm sm:grid-cols-3">
         <div className="flex items-baseline gap-2">

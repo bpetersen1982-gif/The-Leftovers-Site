@@ -55,6 +55,8 @@ export const PERMISSIONS = {
   "fan:delete": ["ADMIN"],
   /** Subscribers' emails are personal data: Admins only. */
   "mailing:manage": ["ADMIN"],
+  /** Press kit is site content (§2.3: Admin only). */
+  "press:manage": ["ADMIN"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;
