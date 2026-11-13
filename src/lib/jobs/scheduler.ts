@@ -1,6 +1,7 @@
 import { db } from "../db";
 import { logger } from "../logger";
 import { purgeStalePending } from "../mailing/service";
+import { checkBackupHeartbeat } from "./backup-watch";
 import { objectStorage } from "../storage";
 import { runBookingJobs } from "./booking-jobs";
 import { runPhotoJobs } from "./photo-jobs";
@@ -28,6 +29,11 @@ async function tick(): Promise<void> {
     await runPhotoJobs(db(), objectStorage());
   } catch (error) {
     logger.error({ err: error }, "photo jobs failed");
+  }
+  try {
+    await checkBackupHeartbeat(db());
+  } catch (error) {
+    logger.error({ err: error }, "backup check failed");
   }
   try {
     const purged = await purgeStalePending(db());

@@ -10,7 +10,7 @@ so a move means updating the variables listed here.
 | Service | Used for | Account / project | Cost |
 |---|---|---|---|
 | GitHub | Source code, CI (`.github/workflows/ci.yml`) | `bpetersen1982-gif/The-Leftovers-Site` (public) | Free |
-| Railway | Hosting: `web` service (Next.js) and `Postgres` | Project `the-leftovers-site`, environment `production` | Usage-based |
+| Railway | Hosting: `web` service (Next.js), `Postgres`, and the nightly `backup` cron service | Project `the-leftovers-site`, environment `production` | Usage-based |
 | Cloudflare: Registrar | Domain `theleftoversband.com` (auto-renew on; expires 2027-10-22) | Brandon's Cloudflare account | ~$10/yr |
 | Cloudflare: DNS | All DNS records; apex and `www` point to Railway (DNS only, not proxied) | Same | Free |
 | Cloudflare: Email Routing | Forwards `booking@`, `hello@`, `copyright@` (one destination each) | Same | Free |
@@ -19,6 +19,12 @@ so a move means updating the variables listed here.
 | Resend | Outgoing email from `mail.theleftoversband.com` (DKIM/SPF in Cloudflare DNS) | Brandon's Resend account | Free tier |
 
 Not set up yet: Sentry (OPS-5), uptime checks (OPS-6), billing alerts (OPS-7), DMCA designated agent (LEG-2).
+
+## Backups
+
+Nightly encrypted database backups go to R2 (`leftovers-media-private/backups/postgres/`).
+The **private key** that opens them is in `~/.leftovers/backup-key.txt` on Brandon's Mac and
+must also be kept in a password manager. See `docs/backups.md` for the restore drill.
 
 ## Where secrets live
 
@@ -42,6 +48,9 @@ updating it in Railway, which redeploys automatically.
 | `R2_PRIVATE_BUCKET`, `R2_PUBLIC_BUCKET`, `R2_PUBLIC_URL` | No | Bucket names and public domain |
 | `APP_URL`, `MAIL_FROM`, `MAIL_REPLY_TO`, `MAIL_TRANSPORT`, `LOG_LEVEL` | No | Site configuration |
 | `NODE_ENV`, `LEFTOVERS_ENV` | No | Both `production`; together they switch on production checks |
+| `backup` service: `DATABASE_URL`, `R2_ACCOUNT_ID`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Yes | References to `Postgres` / `web` variables (not copies) |
+| `backup` service: `BACKUP_AGE_RECIPIENT` | No | age **public** key; the private key never goes on a server |
+| `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` | No / Yes | Cloudflare → Turnstile → widget "The Leftovers" |
 
 ## Infrastructure as Code
 
