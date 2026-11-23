@@ -191,21 +191,29 @@ export default async function BookPage({ searchParams }: { searchParams: Promise
                   const state = stateOf(date);
                   const day = Number(date.slice(8));
                   const fullLabel = `${formatLongDate(date)}: ${PUBLIC_DAY_LABELS[state]}`;
+                  // The visible day number starts the accessible name, so voice control ("click 23")
+                  // works; the full date and status follow as screen-reader-only text (WCAG 2.5.3).
+                  // The name starts with the visible text ("23 Open"), so voice control matches it,
+                  // then gives the full date and status for screen readers (WCAG 2.5.3).
+                  const visible = [String(day), SHORT_LABELS[state]].filter(Boolean).join(" ");
+                  const name = `${visible}: ${fullLabel}${REQUESTABLE.has(state) ? `. ${requestVerb(state)}.` : ""}`;
                   const content = (
                     <>
-                      <span className="block font-heading text-lg">{day}</span>
-                      <span className="block text-[0.6rem] leading-tight tracking-wide uppercase sm:text-xs">{SHORT_LABELS[state]}</span>
+                      <span className="block font-heading text-lg">{day}</span>{" "}
+                      <span className="block text-[0.6rem] leading-tight tracking-wide uppercase sm:text-xs">
+                        {SHORT_LABELS[state]}
+                      </span>
                     </>
                   );
                   const cell = `block min-h-14 border px-1 py-1 sm:min-h-16 ${CELL_STYLES[state]}`;
                   return (
                     <td key={date} className="p-0 align-top">
                       {REQUESTABLE.has(state) ? (
-                        <Link href={requestHref(date)} aria-label={`${fullLabel}. ${requestVerb(state)}.`} className={cell}>
+                        <Link href={requestHref(date)} aria-label={name} className={cell}>
                           {content}
                         </Link>
                       ) : (
-                        <span aria-label={fullLabel} className={cell}>
+                        <span role="img" aria-label={name} className={cell}>
                           {content}
                         </span>
                       )}

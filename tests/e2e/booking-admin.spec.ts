@@ -45,7 +45,7 @@ async function makeRequest(input: { email: string; status: "ACCEPTED" | "AWAITIN
   return request;
 }
 
-const dayCell = (page: Page) => page.getByLabel(new RegExp(`^${formatLongDate(SATURDAY)}: `));
+const dayCell = (page: Page) => page.getByRole("cell").locator(":scope > a, :scope > span").and(page.locator(`[aria-label*="${formatLongDate(SATURDAY)}:"]`));
 
 test.beforeEach(async () => {
   await resetDatabase(prisma);
@@ -79,7 +79,7 @@ test("Admin confirms an accepted request: date shows Booked, prospect gets a con
   await page.goto(link);
   await expect(page.getByText("Your date is confirmed.")).toBeVisible();
   await page.goto(`/book?month=${monthOf(SATURDAY)}`);
-  await expect(dayCell(page)).toHaveAccessibleName(`${formatLongDate(SATURDAY)}: Booked. Contact the band about this date.`);
+  await expect(dayCell(page)).toHaveAccessibleName(`${Number(SATURDAY.slice(8))} Booked: ${formatLongDate(SATURDAY)}: Booked. Contact the band about this date.`);
 });
 
 test("confirming over another request's date requires an override, which releases the other one", async ({ page }) => {
@@ -162,7 +162,7 @@ test("decline frees the date and sends the edited message; holds show Pending", 
   await page.getByRole("region", { name: "Hold the date" }).getByRole("button", { name: "Hold date" }).click();
   await expect(page.getByText("Date held for 7 days. It shows Pending publicly.")).toBeVisible();
   await page.goto(`/book?month=${monthOf(SATURDAY)}`);
-  await expect(dayCell(page)).toHaveAccessibleName(`${formatLongDate(SATURDAY)}: Pending. Contact the band about this date.`);
+  await expect(dayCell(page)).toHaveAccessibleName(`${Number(SATURDAY.slice(8))} Pending: ${formatLongDate(SATURDAY)}: Pending. Contact the band about this date.`);
 });
 
 test("the wizard flags an unrecognized ZIP once, then lets them continue", async ({ page }) => {

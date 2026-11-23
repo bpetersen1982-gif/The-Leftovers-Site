@@ -16,7 +16,7 @@ const bandOffDay = addDays(today, 12);
 
 /** The public calendar cell for a date, found by its accessible label. */
 const dayCell = (page: import("@playwright/test").Page, date: string) =>
-  page.getByLabel(new RegExp(`^${formatLongDate(date)}: `));
+  page.getByRole("cell").locator(":scope > a, :scope > span").and(page.locator(`[aria-label*="${formatLongDate(date)}:"]`));
 
 test.beforeEach(async () => {
   await resetDatabase(prisma);
@@ -45,7 +45,7 @@ test("a member's out-of-office day shows as Limited publicly, without their name
   const visitor = await browser.newContext();
   const publicPage = await visitor.newPage();
   await publicPage.goto(`/book?month=${monthOf(outDay)}`);
-  await expect(dayCell(publicPage, outDay)).toHaveAccessibleName(`${formatLongDate(outDay)}: Limited availability. Request this date.`);
+  await expect(dayCell(publicPage, outDay)).toHaveAccessibleName(`${Number(outDay.slice(8))} Limited: ${formatLongDate(outDay)}: Limited availability. Request this date.`);
   await expect(dayCell(publicPage, outDay)).toHaveAttribute("href", `/book/request?date=${outDay}`);
   await expect(publicPage.getByText(MEMBER.name)).toHaveCount(0);
   await expect(publicPage.getByText("Sister's graduation")).toHaveCount(0);
@@ -63,7 +63,7 @@ test("an Admin can mark the whole band off; that date can't be requested", async
 
   await page.goto(`/book?month=${monthOf(bandOffDay)}`);
   const cell = dayCell(page, bandOffDay);
-  await expect(cell).toHaveAccessibleName(`${formatLongDate(bandOffDay)}: Unavailable`);
+  await expect(cell).toHaveAccessibleName(`${Number(bandOffDay.slice(8))} Unavailable: ${formatLongDate(bandOffDay)}: Unavailable`);
   expect(await cell.evaluate((element) => element.tagName)).toBe("SPAN");
 });
 
@@ -94,10 +94,10 @@ test("the public calendar has a list view, month navigation, and rejects past da
   await expect(page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Book us" })).toHaveAttribute("href", "/book");
 
   // Today is requestable, yesterday (when in the same month) is not.
-  await expect(dayCell(page, today)).toHaveAccessibleName(`${formatLongDate(today)}: Available. Request this date.`);
+  await expect(dayCell(page, today)).toHaveAccessibleName(`${Number(today.slice(8))} Open: ${formatLongDate(today)}: Available. Request this date.`);
   const yesterday = addDays(today, -1);
   if (monthOf(yesterday) === monthOf(today)) {
-    await expect(dayCell(page, yesterday)).toHaveAccessibleName(`${formatLongDate(yesterday)}: Past`);
+    await expect(dayCell(page, yesterday)).toHaveAccessibleName(`${Number(yesterday.slice(8))}: ${formatLongDate(yesterday)}: Past`);
   }
 
   await page.getByRole("link", { name: "Show as a list" }).click();

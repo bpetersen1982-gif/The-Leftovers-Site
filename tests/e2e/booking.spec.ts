@@ -58,7 +58,7 @@ test.afterAll(async () => {
 
 test("calendar → wizard → instant quote → accept with note → date shows Pending; band is notified", async ({ page, browser }) => {
   await page.goto(`/book?month=${monthOf(SATURDAY)}`);
-  await page.getByLabel(new RegExp(`^${formatLongDate(SATURDAY)}: Available`)).click();
+  await page.getByRole("link", { name: new RegExp(`${formatLongDate(SATURDAY)}: Available`) }).click();
   await fillWizard(page, { eventType: "Bar / club" });
 
   await expect(page).toHaveURL(/\/booking\/[A-Za-z0-9_-]{43}$/);
@@ -76,8 +76,7 @@ test("calendar → wizard → instant quote → accept with note → date shows 
   await expect(page.getByText("You accepted the quote. Your date is now pending")).toBeVisible();
 
   await page.goto(`/book?month=${monthOf(SATURDAY)}`);
-  await expect(page.getByLabel(new RegExp(`^${formatLongDate(SATURDAY)}: `))).toHaveAccessibleName(
-    `${formatLongDate(SATURDAY)}: Pending. Contact the band about this date.`,
+  await expect(page.getByRole("cell").locator(":scope > a, :scope > span").and(page.locator(`[aria-label*="${formatLongDate(SATURDAY)}:"]`))).toHaveAccessibleName(`${Number(SATURDAY.slice(8))} Pending: ${formatLongDate(SATURDAY)}: Pending. Contact the band about this date.`,
   );
 
   // Every band account got notified; only the Admin's copy shows the price.

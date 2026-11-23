@@ -96,7 +96,10 @@ describe("double opt-in", () => {
     expect(await confirmSubscription(prisma, second, new Date(clock.getTime() + 8 * 86_400_000))).toBe(false);
     expect(await checkConfirmToken(prisma, "not-a-token", clock)).toBe("invalid");
 
-    expect(await purgeStalePending(prisma, new Date(clock.getTime() + 31 * 86_400_000))).toBe(1);
+    // createdAt is set by the database (real time), so measure the retention from it.
+    const { createdAt } = await prisma.subscriber.findUniqueOrThrow({ where: { email: "fan@example.test" } });
+    expect(await purgeStalePending(prisma, new Date(createdAt.getTime() + 29 * 86_400_000))).toBe(0);
+    expect(await purgeStalePending(prisma, new Date(createdAt.getTime() + 31 * 86_400_000))).toBe(1);
     expect(await prisma.subscriber.count()).toBe(0);
   });
 });
