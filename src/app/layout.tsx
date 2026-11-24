@@ -20,7 +20,9 @@ export const metadata: Metadata = {
   description: DESCRIPTION,
   icons: { icon: "/brand/app-icon-192.png", apple: "/brand/app-icon-180.png" },
   appleWebApp: { capable: true, title: "Leftovers", statusBarStyle: "black-translucent" },
-  openGraph: { type: "website", siteName: "The Leftovers", url: SITE_URL, description: DESCRIPTION },
+  openGraph: { type: "website", siteName: "The Leftovers", locale: "en_US", description: DESCRIPTION },
+  // Large previews on X and others that read Twitter tags; the image comes from opengraph-image.
+  twitter: { card: "summary_large_image" },
 };
 
 export const viewport: Viewport = {

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import { PhotoImg } from "@/components/photo-img";
+import { DEFAULT_OG_IMAGE } from "@/lib/og/default";
 import { formatLongDate } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { getPublicAlbum } from "@/lib/photos/album-queries";
@@ -28,8 +29,9 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
     description: album.description || `Photos of The Leftovers: ${album.title}.`,
     alternates: { canonical: `/photos/albums/${album.slug}` },
     openGraph: {
+      siteName: "The Leftovers",
       type: "website",
-      images: jpeg && album.cover ? [{ url: jpeg.url, width: jpeg.width, height: jpeg.height, alt: album.cover.altText }] : [],
+      images: jpeg && album.cover ? [{ url: jpeg.url, width: jpeg.width, height: jpeg.height, alt: album.cover.altText }] : [DEFAULT_OG_IMAGE],
     },
   };
 }

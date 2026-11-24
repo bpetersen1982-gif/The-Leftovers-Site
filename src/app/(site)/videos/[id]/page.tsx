@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
     title: `${video.title}: Videos`,
     description: video.description || `${video.title}, live from The Leftovers.`,
     alternates: { canonical: `/videos/${video.id}` },
-    openGraph: { type: "video.other", images: [{ url: video.playback.posterUrl, alt: video.title }] },
+    openGraph: { siteName: "The Leftovers", type: "video.other", images: [{ url: video.playback.posterUrl, alt: video.title }] },
   };
 }
 

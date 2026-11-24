@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 import { z } from "zod";
 import { PhotoImg } from "@/components/photo-img";
+import { DEFAULT_OG_IMAGE } from "@/lib/og/default";
 import { db } from "@/lib/db";
 import { getPublicPhoto } from "@/lib/photos/queries";
 import { objectStorage } from "@/lib/storage";
@@ -28,8 +29,9 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
     description,
     alternates: { canonical: `/photos/${photo.id}` },
     openGraph: {
+      siteName: "The Leftovers",
       type: "article",
-      images: photo.image.jpeg ? [{ url: photo.image.jpeg.url, width: photo.image.jpeg.width, height: photo.image.jpeg.height, alt: photo.altText }] : [],
+      images: photo.image.jpeg ? [{ url: photo.image.jpeg.url, width: photo.image.jpeg.width, height: photo.image.jpeg.height, alt: photo.altText }] : [DEFAULT_OG_IMAGE],
     },
   };
 }
